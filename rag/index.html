@@ -179,7 +179,10 @@ footer { font-size: 13px; color: var(--muted); }
       <span class="note">Preguntas como:</span>
       <div class="roles" id="roles" role="group" aria-label="Perfil profesional"></div>
     </div>
-    <span class="live" id="live">Comprobando conexión con Claude…</span>
+    <div class="row">
+      <span class="live" id="live">Comprobando conexión con Claude…</span>
+      <button class="btn" id="resetBtn" type="button">↺ Reiniciar demo</button>
+    </div>
   </div>
   <form class="qbox" id="qform">
     <input id="q" type="text" autocomplete="off" aria-label="Tu pregunta" placeholder="Escribe una pregunta sobre la normativa o los datos del hospital">
@@ -407,7 +410,7 @@ const noRagPrompt = (q, role) => `Eres el asistente del Hospital Demo. Responde 
 const NOT_FOUND = "No consta en los documentos disponibles para tu perfil. Consulta con la supervisión o con el servicio responsable del tema.";
 
 // ================= Estado =================
-const S = { role: "med", q: "", result: null, hits: [], open: new Set(), editing: null, preset: null, live: null, ctl: null };
+const S = { gen: 0, role: "med", q: "", result: null, hits: [], open: new Set(), editing: null, preset: null, live: null, ctl: null };
 const $ = id => document.getElementById(id);
 
 // ================= Archivo =================
@@ -562,12 +565,13 @@ async function run(q, preset = PRESETS.find(p => p.q === q) || null) {
   const body = $("ragBody"), tag = $("ragTag");
   tag.className = "tag"; tag.textContent = ""; thinking(body, "Buscando en el archivo…");
   $("askBtn").disabled = true;
+  const gen = ++S.gen, stale = () => gen !== S.gen;
   try {
-    setStep(1, true); await wait(350);
+    setStep(1, true); await wait(350); if (stale()) return;
     S.result = search(q, S.role); S.hits = S.result.hits;
-    setStep(2, true); renderLib(); await wait(650);
+    setStep(2, true); renderLib(); await wait(650); if (stale()) return;
     const p = buildPrompt(q, S.role, S.hits);
-    setStep(3, true); renderPrompt(p); await wait(500);
+    setStep(3, true); renderPrompt(p); await wait(500); if (stale()) return;
     setStep(4, true);
     if (!S.hits.length) {
       tag.className = "tag"; tag.textContent = "sin llamar al LLM";
@@ -576,6 +580,7 @@ async function run(q, preset = PRESETS.find(p => p.q === q) || null) {
     const pristine = S.hits.every(c => c.text === c.original);
     const canRecord = preset?.rag && pristine && preset.expect && preset.expect[S.role] === S.hits.map(c => c.id).join(",");
     const ok = await ask(promptText(p), body, tag, S.hits);
+    if (stale()) return;
     if (ok) { verdictFor(body); return; }
     if (canRecord) {
       tag.className = "tag rec"; tag.textContent = "respuesta grabada de ejemplo";
@@ -586,7 +591,7 @@ async function run(q, preset = PRESETS.find(p => p.q === q) || null) {
       body.textContent = "Para responder a esta pregunta hace falta consultar a Claude en vivo: abre la página en Claude y acepta el permiso. Los pasos 2 y 3 (búsqueda y consulta) sí puedes verlos arriba.";
     }
   } finally {
-    setStep(4, false); $("askBtn").disabled = false;
+    if (!stale()) { setStep(4, false); $("askBtn").disabled = false; }
   }
 }
 
@@ -595,8 +600,9 @@ async function compare() {
   $("ansNo").hidden = false; $("answers").classList.add("two");
   const body = $("noBody"), tag = $("noTag");
   $("noVerdict").textContent = "Sin documentos, el modelo responde con conocimiento general: no conoce los datos ni las normas propias del hospital y no puede citar ninguna fuente.";
+  const gen = S.gen;
   const ok = await ask(noRagPrompt(S.q, S.role), body, tag, []);
-  if (ok) return;
+  if (ok || gen !== S.gen) return;
   if (S.preset) { tag.className = "tag rec"; tag.textContent = "respuesta grabada de ejemplo"; renderAnswer(body, S.preset.norag, []); }
   else { tag.className = "tag rec"; tag.textContent = "sin conexión"; thinking(body, "Esta comparación necesita consultar a Claude en vivo."); }
 }
@@ -615,6 +621,26 @@ PRESETS.forEach(p => {
 $("qform").onsubmit = e => { e.preventDefault(); run($("q").value); };
 $("cmpBtn").onclick = compare;
 $("stopBtn").onclick = () => S.ctl?.abort();
+
+// Deja la demo como recién abierta y vacía, lista para el siguiente caso
+function resetAll() {
+  S.gen++; S.ctl?.abort(); S.ctl = null;
+  CHUNKS.forEach(c => c.text = c.original);
+  Object.assign(S, { role: "med", q: "", result: null, hits: [], open: new Set(), editing: null, preset: null });
+  [...$("roles").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.role === "med"));
+  $("q").value = ""; $("askBtn").disabled = false; $("stopBtn").hidden = true;
+  setStep(0);
+  renderLib();
+  $("prompt").innerHTML = ""; $("prompt").textContent = "Haz una pregunta para ver aquí el texto exacto que recibe el LLM.";
+  $("psize").textContent = "";
+  $("ansNo").hidden = true; $("answers").classList.remove("two");
+  $("ragTag").className = "tag"; $("ragTag").textContent = "";
+  thinking($("ragBody"), "Elige un perfil y escribe una pregunta, o toca una de las sugeridas.");
+  $("ragVerdict").hidden = true;
+  window.scrollTo({ top: 0 });
+  $("q").focus();
+}
+$("resetBtn").onclick = resetAll;
 
 function setLive(on) {
   const el = $("live");
