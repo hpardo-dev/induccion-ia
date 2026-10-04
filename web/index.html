@@ -75,6 +75,7 @@ header .lede { max-width: 68ch; color: var(--fg); font-size: 17px; }
 /* Botones */
 .btn { background: var(--panel-2); border: 1px solid var(--line); padding: 7px 12px; cursor: pointer; font-size: 14px; line-height: 1.2; }
 .btn:hover { border-color: var(--accent); }
+.btn:disabled { cursor: default; color: var(--accent-hi); border-color: var(--accent); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #031026; font-weight: 700; }
 .btn.primary:hover { background: var(--accent-hi); }
 .btn[aria-pressed="true"] { border-color: var(--accent-hi); color: var(--accent-hi); background: #10244d; }
@@ -546,18 +547,28 @@ function drawNet() {
   // Rótulos
   nctx.font = "8px Silkscreen, monospace"; nctx.fillStyle = "#5c6f9c"; nctx.textBaseline = "alphabetic"; nctx.textAlign = "center";
   nctx.fillText(S.showSal ? "MAPA DE CALOR" : "ENTRADA 784", IMG.x + 42, IMG.y - 8);
-  nctx.fillText("CAPA 1", pos(1, 0).x, NH - 6);
-  nctx.fillText("CAPA 2", pos(2, 0).x, NH - 6);
-  nctx.fillText("SALIDA", pos(3, 0).x + 20, NH - 6);
+  const playing = s < 3.2, at = l => playing && s >= l - 1 && s < l + 0.2;
+  nctx.fillStyle = at(1) ? "#9fd8ff" : "#5c6f9c"; nctx.fillText("CAPA 1", pos(1, 0).x, NH - 6);
+  nctx.fillStyle = at(2) ? "#9fd8ff" : "#5c6f9c"; nctx.fillText("CAPA 2", pos(2, 0).x, NH - 6);
+  nctx.fillStyle = at(3) ? "#9fd8ff" : "#5c6f9c"; nctx.fillText("SALIDA", pos(3, 0).x + 20, NH - 6);
   nctx.textAlign = "start";
 }
 
 let raf = 0;
-function animate() {
-  if (reduceMotion) { S.anim = 3.2; drawNet(); return; }
+// Las animaciones automáticas respetan "reducir movimiento"; el botón "Ver pasar la señal"
+// es una petición explícita, así que siempre anima, y más despacio para poder seguirla.
+const replayBtn = document.getElementById("replay");
+function animate(explicit = false) {
   cancelAnimationFrame(raf);
+  if (reduceMotion && !explicit) { S.anim = 3.2; drawNet(); return; }
+  const msPerLayer = explicit ? 1100 : 520;
   const t0 = performance.now();
-  const tick = now => { S.anim = Math.min(3.2, (now - t0) / 520); drawNet(); if (S.anim < 3.2) raf = requestAnimationFrame(tick); };
+  if (explicit) { replayBtn.disabled = true; replayBtn.textContent = "Pasando la señal…"; }
+  const tick = now => {
+    S.anim = Math.min(3.2, (now - t0) / msPerLayer); drawNet();
+    if (S.anim < 3.2) raf = requestAnimationFrame(tick);
+    else { replayBtn.disabled = false; replayBtn.textContent = "▶ Ver pasar la señal"; }
+  };
   raf = requestAnimationFrame(tick);
 }
 
@@ -695,7 +706,7 @@ const setTool = t => { S.tool = t; document.getElementById("toolDraw").setAttrib
 document.getElementById("toolDraw").onclick = () => setTool("draw");
 document.getElementById("toolErase").onclick = () => setTool("erase");
 document.getElementById("clear").onclick = () => { S.truth = null; pctx.clearRect(0, 0, 280, 280); setTool("draw"); recompute(false); };
-document.getElementById("replay").onclick = () => animate();
+replayBtn.onclick = () => animate(true);
 const salBtn = document.getElementById("salToggle");
 const setSal = on => { S.showSal = on; salBtn.setAttribute("aria-pressed", on); renderSeen(); drawNet(); };
 salBtn.onclick = () => setSal(!S.showSal);
@@ -755,7 +766,7 @@ const TOUR = [
     go: () => { S.sel = { layer: 1, idx: strongest(1) }; drawNet(); renderInspector(); focusPanels(["pNet", "pInspect"]); } },
   { t: "Las capas combinan patrones",
     p: "La capa 2 no mira píxeles: combina las detecciones de la capa 1, igual que juntamos varios signos para llegar a un hallazgo. Pulsa «Ver pasar la señal» para seguir el recorrido de izquierda a derecha.",
-    go: () => { S.sel = { layer: 2, idx: strongest(2) }; animate(); renderInspector(); focusPanels(["pNet", "pInspect"]); } },
+    go: () => { S.sel = { layer: 2, idx: strongest(2) }; animate(true); renderInspector(); focusPanels(["pNet", "pInspect"]); } },
   { t: "La respuesta es una probabilidad",
     p: "La última capa vota entre las 10 opciones y el resultado se reparte en porcentajes que suman 100 %. Una probabilidad alta no es una garantía, y una baja es una señal para pedir una segunda opinión.",
     go: () => { S.sel = { layer: 3, idx: S.pred }; drawNet(); renderInspector(); focusPanels(["pOut"]); } },
