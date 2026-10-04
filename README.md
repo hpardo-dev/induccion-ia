@@ -15,6 +15,12 @@ Animación interactiva en pixel art de una red neuronal real (784 → 16 → 16 
 
 Para usarla basta con abrir `web/index.html` en un navegador; no necesita servidor ni instalación.
 
+## Pregúntale a la normativa (`rag/`)
+
+Demo interactiva de un asistente RAG + LLM sobre la normativa y los datos de un hospital ficticio (todos los documentos y cifras son sintéticos). Muestra los cuatro pasos: pregunta, búsqueda de fragmentos (con puntuación visible), consulta que recibe el LLM y respuesta con citas clicables. Incluye control de acceso por perfil (médico/a, enfermería, administración), edición de documentos para ver cómo cambia la respuesta sin reentrenar, y comparación con el LLM sin documentos.
+
+Publicada como artifact de Claude, responde en vivo con Claude (con permiso del usuario). Abierta como archivo local, usa respuestas grabadas para las preguntas sugeridas.
+
 ## Reentrenar la red (`training/`)
 
 ```bash

@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pregúntale a la normativa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;600&family=Silkscreen&display=swap">
+<style>
+/* Layout: misma consola de la serie "Inducción en IA". Arriba la pregunta y el recorrido de 4 pasos;
+   debajo, a la izquierda el archivo de documentos con su puntuación y a la derecha lo que recibe el LLM y su respuesta. */
+:root {
+  color-scheme: dark;
+  --bg: #04060c;
+  --panel: #0a1122;
+  --panel-2: #0e1830;
+  --line: #1a2a4f;
+  --fg: #d5e0f5;
+  --muted: #7d8db3;
+  --accent: #3d8bff;
+  --accent-hi: #9fd8ff;
+  --ok: #4fd1a5;
+  --warn: #ffcf5a;
+  --bad: #ff7a7a;
+  --font-pixel: "Silkscreen", "Courier New", monospace;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font-body); padding-inline: 16px; padding-block: 0 48px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 700; }
+p { margin: 0; }
+button, select, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 2px; }
+
+header { padding-block: 28px 4px; display: grid; gap: 12px; }
+.eyebrow { font-family: var(--font-pixel); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+header h1 { font-family: var(--font-pixel); font-weight: 400; font-size: clamp(28px, 5vw, 48px); line-height: 1.05; color: var(--accent-hi); }
+header .lede { max-width: 70ch; font-size: 17px; }
+.note { font-size: 13.5px; color: var(--muted); }
+
+.panel { background: var(--panel); border: 1px solid var(--line); padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel-title { font-family: var(--font-pixel); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-hi); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.panel-title small { font-family: var(--font-body); text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 13px; }
+.clinic { font-size: 14px; color: var(--muted); border-left: 2px solid var(--ok); padding-left: 10px; }
+.clinic b { color: var(--ok); }
+
+.btn { background: var(--panel-2); border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; font-size: 14px; line-height: 1.2; }
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #031026; font-weight: 700; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hi); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Pregunta */
+.ask { background: var(--panel-2); }
+.ask-top { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.roles { display: inline-flex; border: 1px solid var(--line); }
+.roles button { background: transparent; border: 0; padding: 7px 14px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.roles button + button { border-left: 1px solid var(--line); }
+.roles button[aria-pressed="true"] { background: #10244d; color: var(--accent-hi); }
+.live { font-family: var(--font-mono); font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line); color: var(--muted); }
+.live.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+.live.off { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); }
+.qbox { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.qbox input { background: #050a17; border: 1px solid var(--line); padding: 12px 14px; font-size: 17px; min-width: 0; }
+.qbox input:focus { border-color: var(--accent); outline: none; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { background: transparent; border: 1px dashed var(--line); padding: 5px 10px; font-size: 13.5px; color: var(--fg); cursor: pointer; text-align: left; }
+.presets button:hover { border-color: var(--accent); border-style: solid; }
+
+/* Pasos */
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--line); }
+.step { padding: 12px 14px; display: grid; gap: 4px; background: var(--panel); position: relative; transition: background .3s; }
+.step + .step { border-left: 1px solid var(--line); }
+.step .n { font-family: var(--font-pixel); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.step b { font-size: 15px; }
+.step span { font-size: 13px; color: var(--muted); }
+.step.on { background: #0f2350; }
+.step.on .n { color: var(--accent-hi); }
+.step.busy .n::after { content: " ●"; animation: blink 1s steps(2) infinite; color: var(--accent-hi); }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Cuerpo */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+.right { display: grid; gap: 16px; min-width: 0; position: sticky; top: 12px; }
+
+.doc { border: 1px solid var(--line); background: #070d1c; }
+.doc.locked { opacity: .55; }
+.doc-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.doc-head .code { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.doc-head .t { font-weight: 700; font-size: 14.5px; }
+.doc-head .acc { font-size: 12px; color: var(--muted); }
+.doc-head .acc.lock { color: var(--bad); }
+.kind { font-family: var(--font-pixel); font-size: 10px; letter-spacing: .06em; padding: 1px 6px; border: 1px solid var(--line); color: var(--muted); margin-right: 6px; }
+.chunks { display: grid; }
+.chunk { display: grid; grid-template-columns: 26px minmax(0, 1fr) 64px; gap: 8px; padding: 6px 10px; align-items: start; border-top: 1px solid #111d3a; cursor: pointer; background: transparent; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; width: 100%; font-size: 13.5px; color: var(--muted); }
+.chunk:first-child { border-top: 0; }
+.chunk:hover { background: #0b1630; }
+.chunk .badge { font-family: var(--font-mono); font-size: 12px; font-weight: 600; text-align: center; color: transparent; }
+.chunk .txt { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.chunk.open .txt { -webkit-line-clamp: unset; display: block; color: var(--fg); }
+.chunk .score { display: grid; gap: 3px; font-family: var(--font-mono); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+.chunk .sbar { height: 4px; background: var(--panel-2); position: relative; }
+.chunk .sbar i { position: absolute; inset: 0 auto 0 0; background: var(--accent); transition: width .5s; }
+.chunk.hit { background: #0d2048; color: var(--fg); }
+.chunk.hit .badge { color: #031026; background: var(--accent-hi); }
+.chunk.hit .sbar i { background: var(--accent-hi); }
+.chunk.flash { outline: 2px solid var(--ok); outline-offset: -2px; }
+.chunk .edited { color: var(--warn); font-size: 11.5px; font-family: var(--font-mono); }
+.editor { display: grid; gap: 6px; padding: 8px 10px 10px 44px; border-top: 1px solid #111d3a; }
+.editor textarea { background: #050a17; border: 1px solid var(--accent); padding: 8px; font-size: 14px; min-height: 90px; resize: vertical; width: 100%; }
+.lib { display: grid; gap: 8px; }
+
+.prompt { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; background: #050a17; border: 1px solid var(--line); padding: 12px; max-height: 340px; overflow: auto; margin: 0; }
+.prompt .p-rule { color: var(--muted); }
+.prompt .p-frag { color: var(--accent-hi); }
+.prompt .p-q { color: var(--ok); }
+.size { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+.answers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.answers.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ans { border: 1px solid var(--line); background: #070d1c; padding: 14px; display: grid; gap: 10px; align-content: start; }
+.ans h3 { font-family: var(--font-pixel); font-weight: 400; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-hi); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ans.norag h3 { color: var(--warn); }
+.ans .body { font-size: 16.5px; line-height: 1.6; white-space: pre-wrap; }
+.ans .body.thinking { color: var(--muted); font-style: italic; }
+.cite { font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--accent-hi); color: #031026; border: 0; padding: 0 5px; margin: 0 1px; cursor: pointer; vertical-align: 1px; }
+.cite:hover { background: var(--ok); }
+.tag { font-family: var(--font-body); text-transform: none; letter-spacing: 0; font-size: 12px; padding: 1px 8px; border: 1px solid var(--line); color: var(--muted); }
+.tag.rec { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.tag.live { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.ans .verdict { font-size: 13.5px; padding: 8px 10px; border: 1px solid; }
+.verdict.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.verdict.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.verdict.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); }
+
+.lessons { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.lessons p { font-size: 15px; }
+.gloss { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 15px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-pixel); font-weight: 400; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-hi); }
+td:first-child { font-weight: 700; white-space: nowrap; }
+td:last-child { color: var(--ok); }
+footer { font-size: 13px; color: var(--muted); }
+
+@media (max-width: 980px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .right { position: static; }
+  .answers.two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .step:nth-child(3) { border-left: 0; }
+  .step:nth-child(n+3) { border-top: 1px solid var(--line); }
+  .qbox { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Inducción en IA · Asistentes con documentos (RAG)</div>
+  <h1>Pregúntale a la normativa</h1>
+  <p class="lede">Un asistente que responde con los protocolos y los datos del hospital. Primero <b>busca</b> los fragmentos de documentos relevantes, luego se los <b>entrega</b> a un modelo de lenguaje (LLM) junto con tu pregunta, y el modelo <b>redacta</b> la respuesta citando de dónde sale cada dato.</p>
+  <p class="note">El Hospital Demo y todos sus documentos y datos son ficticios, creados para esta formación.</p>
+</header>
+
+<section class="panel ask" aria-label="Pregunta">
+  <div class="ask-top">
+    <div class="row">
+      <span class="note">Preguntas como:</span>
+      <div class="roles" id="roles" role="group" aria-label="Perfil profesional"></div>
+    </div>
+    <span class="live" id="live">Comprobando conexión con Claude…</span>
+  </div>
+  <form class="qbox" id="qform">
+    <input id="q" type="text" autocomplete="off" aria-label="Tu pregunta" placeholder="Escribe una pregunta sobre la normativa o los datos del hospital">
+    <button class="btn primary" id="askBtn" type="submit">Preguntar</button>
+  </form>
+  <div class="presets" id="presets"></div>
+</section>
+
+<section class="steps" aria-label="Pasos del proceso">
+  <div class="step" id="st1"><div class="n">Paso 1</div><b>Pregunta</b><span>Llega tu consulta con tu perfil.</span></div>
+  <div class="step" id="st2"><div class="n">Paso 2</div><b>Buscar</b><span>Se puntúan los fragmentos a los que tienes acceso.</span></div>
+  <div class="step" id="st3"><div class="n">Paso 3</div><b>Armar la consulta</b><span>Los 3 mejores se pegan junto a la pregunta.</span></div>
+  <div class="step" id="st4"><div class="n">Paso 4</div><b>Redactar</b><span>El LLM responde citando las fuentes.</span></div>
+</section>
+
+<section class="main">
+  <div class="panel">
+    <div class="panel-title">Archivo del hospital <small>toca un fragmento para leerlo o editarlo</small></div>
+    <div class="lib" id="lib"></div>
+    <p class="clinic"><b>Cómo funciona:</b> cada documento se corta en fragmentos cortos, como fichas. Al preguntar, cada ficha recibe una puntuación según cuánto se parece a la pregunta. Aquí la búsqueda compara palabras; los sistemas reales comparan significados, así que encuentran "caída" aunque preguntes por "paciente que se cae".</p>
+  </div>
+
+  <div class="right">
+    <div class="panel">
+      <div class="panel-title">Lo que recibe el LLM <small id="psize"></small></div>
+      <pre class="prompt" id="prompt"></pre>
+      <p class="clinic"><b>La clave:</b> el modelo no "sabe" la normativa del hospital. Solo lee lo que se le pega aquí, en el momento de cada pregunta. Por eso basta con actualizar los documentos para que cambien las respuestas, sin reentrenar nada.</p>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Respuesta
+        <span class="row">
+          <button class="btn" id="cmpBtn" type="button">Comparar: preguntar sin documentos</button>
+          <button class="btn" id="stopBtn" type="button" hidden>Detener</button>
+        </span>
+      </div>
+      <div class="answers" id="answers">
+        <div class="ans rag" id="ansRag">
+          <h3><span>Con documentos (RAG)</span><span class="tag" id="ragTag"></span></h3>
+          <div class="body" id="ragBody"></div>
+          <div class="verdict" id="ragVerdict" hidden></div>
+        </div>
+        <div class="ans norag" id="ansNo" hidden>
+          <h3><span>Solo el LLM, sin documentos</span><span class="tag" id="noTag"></span></h3>
+          <div class="body" id="noBody"></div>
+          <div class="verdict warn" id="noVerdict"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="lessons">
+  <div class="panel">
+    <div class="panel-title">Para qué sirve</div>
+    <p>Consultar protocolos, reglamentos y guías internas en lenguaje natural, con la cita exacta para comprobarlo. Combinado con conexiones a los sistemas (camas, listas de espera, laboratorio) responde con datos del momento, no con lo que el modelo aprendió hace meses.</p>
+  </div>
+  <div class="panel">
+    <div class="panel-title">Qué conviene recordar</div>
+    <p>Si la búsqueda no encuentra el fragmento correcto, la respuesta será incompleta aunque suene segura. Revisa siempre las citas. Y un documento desactualizado en el archivo produce respuestas desactualizadas: el asistente es tan bueno como la normativa que le das.</p>
+  </div>
+  <div class="panel">
+    <div class="panel-title">En un hospital real</div>
+    <p>Los documentos salen de la intranet o el gestor documental, y los datos se consultan a través de conexiones seguras con el HIS. El sistema respeta los permisos de cada usuario, registra cada consulta y se ejecuta en infraestructura aprobada por el hospital. Nunca se pegan datos de pacientes en un chatbot público.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">Diccionario <small>la jerga, en una línea</small></div>
+  <div class="gloss">
+    <table>
+      <thead><tr><th>Término</th><th>Qué es</th><th>En esta demo</th></tr></thead>
+      <tbody>
+        <tr><td>LLM</td><td>Modelo de lenguaje: redacta texto a partir de lo que lee.</td><td>Claude, que recibe la consulta del paso 3.</td></tr>
+        <tr><td>RAG</td><td>Generación aumentada por recuperación: buscar primero, redactar después.</td><td>Los pasos 2 a 4 juntos.</td></tr>
+        <tr><td>Fragmento (chunk)</td><td>Trozo corto de un documento que se puede buscar por separado.</td><td>Cada línea del archivo del hospital.</td></tr>
+        <tr><td>Embedding</td><td>Representación numérica del significado de un texto, para buscar por parecido.</td><td>Aquí se simplifica a buscar palabras en común.</td></tr>
+        <tr><td>Contexto</td><td>Todo el texto que el LLM lee en una consulta.</td><td>El recuadro "Lo que recibe el LLM".</td></tr>
+        <tr><td>Alucinación</td><td>Respuesta plausible pero inventada o sin respaldo.</td><td>Compárala con el botón "preguntar sin documentos".</td></tr>
+        <tr><td>Control de acceso</td><td>Cada usuario solo recupera los documentos que puede ver.</td><td>Cambia de perfil y mira qué documentos se bloquean.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>Las preguntas libres se responden en vivo con Claude, con tu cuenta y tras pedirte permiso la primera vez. Si no hay conexión, las preguntas sugeridas muestran una respuesta grabada de ejemplo, marcada como tal.</footer>
+</div>
+
+<script>
+(() => {
+// ================= Documentos sintéticos del Hospital Demo =================
+const ROLES = { med: "Médico/a", enf: "Enfermería", adm: "Administración" };
+const DOCS = [
+  { id: "INF4", code: "PRT-INF-004 · v3.2", title: "Profilaxis antibiótica quirúrgica", kind: "Protocolo", access: ["med", "enf"], chunks: [
+    "Alcance: se aplica a toda cirugía programada o urgente con riesgo de infección del sitio quirúrgico en pacientes adultos. Quedan fuera las cirugías limpias sin implante, salvo indicación del cirujano.",
+    "Antibiótico de elección: cefazolina 2 g intravenosa; 3 g si el paciente pesa 120 kg o más. En alergia grave a betalactámicos se usa clindamicina 900 mg IV o vancomicina 15 mg/kg IV.",
+    "Momento de administración: la cefazolina se administra dentro de los 60 minutos previos a la incisión. La vancomicina se inicia 120 minutos antes de la incisión por su infusión lenta. La hora se registra en la hoja de verificación quirúrgica.",
+    "Redosificación: repetir cefazolina cada 4 horas de cirugía o si la pérdida de sangre supera 1.500 ml. La profilaxis no se prolonga más de 24 horas tras la intervención.",
+  ]},
+  { id: "ENF11", code: "PRT-ENF-011 · v2.0", title: "Prevención y actuación ante caídas", kind: "Protocolo", access: ["med", "enf"], chunks: [
+    "Valoración del riesgo de caída con la escala de Morse al ingreso, cada 24 horas y tras cualquier cambio (caída previa, sedación, traslado de unidad). Una puntuación de 45 o más indica riesgo alto.",
+    "Medidas en riesgo alto de caída: pulsera amarilla, cama en posición baja con frenos, timbre al alcance del paciente, barandillas según valoración y revisión con el médico responsable de fármacos como benzodiacepinas e hipnóticos.",
+    "Actuación tras una caída del paciente: valorar al paciente antes de moverlo, avisar al médico de guardia, notificar la caída en el sistema de notificación de incidentes en menos de 24 horas y repetir la escala de Morse.",
+  ]},
+  { id: "DOC2", code: "NRM-DOC-002 · v4.1", title: "Consentimiento informado", kind: "Normativa", access: ["med", "enf", "adm"], chunks: [
+    "Se requiere consentimiento informado por escrito para intervenciones quirúrgicas, procedimientos invasivos, anestesia o sedación profunda, transfusiones programadas y procedimientos con riesgo relevante para el paciente.",
+    "El consentimiento lo obtiene el médico que realiza el procedimiento y no puede delegarse en personal administrativo. En procedimientos programados se entrega al paciente con al menos 24 horas de antelación.",
+    "En menores de edad o pacientes sin capacidad decide el representante legal, escuchando siempre la opinión del paciente. En urgencia vital sin posibilidad de consentir se actúa y se documenta el motivo en la historia clínica.",
+    "El paciente puede revocar su consentimiento por escrito en cualquier momento, sin necesidad de justificarlo.",
+  ]},
+  { id: "SIS7", code: "NRM-SIS-007 · v1.3", title: "Acceso a la historia clínica electrónica", kind: "Normativa", access: ["med", "enf", "adm"], chunks: [
+    "Solo se accede a la historia clínica de pacientes con los que existe una relación asistencial. Cada acceso queda registrado con usuario, fecha y motivo.",
+    "Se realizan auditorías trimestrales aleatorias de los accesos a historias clínicas. Un acceso sin justificación puede dar lugar a un expediente disciplinario.",
+    "Las credenciales son personales e intransferibles. La sesión se bloquea tras 10 minutos de inactividad.",
+    "Las solicitudes de copia de la historia clínica por parte del paciente se tramitan en el Servicio de Atención al Paciente, con un plazo máximo de 30 días.",
+  ]},
+  { id: "RRHH3", code: "RGL-RRHH-003 · v2.4", title: "Reglamento de guardias médicas", kind: "Reglamento", access: ["med", "adm"], chunks: [
+    "La guardia tiene una duración máxima de 24 horas continuadas. Tras una guardia hay un descanso obligatorio de 12 horas como mínimo y el facultativo libra el día siguiente.",
+    "Cada facultativo realiza un máximo de 5 guardias al mes. Con acuerdo voluntario de la jefatura de servicio se puede llegar a 7.",
+    "Cambios de guardia: solo entre facultativos de la misma categoría, y se comunican a la jefatura con al menos 48 horas de antelación a través del portal de Recursos Humanos.",
+    "Los residentes de primer año hacen las guardias siempre con un médico adjunto presente físicamente en el hospital.",
+  ]},
+  { id: "INF1", code: "PRT-INF-001 · v5.0", title: "Higiene de manos", kind: "Protocolo", access: ["med", "enf", "adm"], chunks: [
+    "La higiene de manos se realiza en los cinco momentos: antes del contacto con el paciente, antes de una tarea limpia o aséptica, después del riesgo de exposición a fluidos, después del contacto con el paciente y después del contacto con su entorno.",
+    "Con solución hidroalcohólica la fricción dura de 20 a 30 segundos. Con agua y jabón, de 40 a 60 segundos; es obligatorio si las manos están visiblemente sucias o ante sospecha de Clostridioides difficile.",
+    "En la atención directa al paciente: uñas cortas y sin esmalte, y sin anillos, relojes ni pulseras.",
+  ]},
+  { id: "CAL10", code: "NRM-CAL-010 · v1.0", title: "Uso de herramientas de inteligencia artificial", kind: "Normativa", access: ["med", "enf", "adm"], chunks: [
+    "Está prohibido introducir datos de pacientes (nombre, número de historia, informes, imágenes) en herramientas de IA o chatbots públicos no autorizados por el hospital.",
+    "Solo se pueden usar las herramientas de IA aprobadas por el Comité de Sistemas, que se ejecutan en la infraestructura del hospital y registran cada consulta.",
+    "La IA es una herramienta de apoyo: la decisión clínica y la responsabilidad siguen siendo del profesional, que debe revisar siempre las respuestas y sus fuentes.",
+  ]},
+  { id: "CAMAS", code: "SIS-HIS · hoy 07:00", title: "Ocupación de camas por servicio", kind: "Datos", access: ["med", "enf", "adm"], chunks: [
+    "Medicina Interna: 56 camas, 52 ocupadas, 4 libres. Altas previstas hoy: 6.",
+    "Cirugía General: 38 camas, 30 ocupadas, 8 libres. Altas previstas hoy: 5.",
+    "Traumatología: 30 camas, 27 ocupadas, 3 libres. Altas previstas hoy: 2.",
+    "Cardiología: 20 camas, 18 ocupadas, 2 libres. Altas previstas hoy: 3.",
+    "Pediatría: 24 camas, 12 ocupadas, 12 libres. Altas previstas hoy: 4.",
+    "UCI: 12 camas, 11 ocupadas, 1 libre. Altas previstas hoy: 1.",
+  ]},
+  { id: "LEQ", code: "SIS-LEQ · corte 30/09/2026", title: "Lista de espera quirúrgica", kind: "Datos", access: ["med", "adm"], chunks: [
+    "Traumatología: 412 pacientes en lista de espera quirúrgica, demora media 98 días, 23 con prioridad 1 (operar en 30 días o menos).",
+    "Cirugía General: 289 pacientes en lista de espera quirúrgica, demora media 71 días, 31 con prioridad 1.",
+    "Oftalmología: 356 pacientes en lista de espera quirúrgica, demora media 64 días, 8 con prioridad 1.",
+    "Urología: 141 pacientes en lista de espera quirúrgica, demora media 83 días, 17 con prioridad 1.",
+  ]},
+];
+const CHUNKS = [];
+DOCS.forEach(d => d.chunks.forEach((text, i) => CHUNKS.push({ id: `${d.id}-${i + 1}`, doc: d, original: text, text })));
+const byId = Object.fromEntries(CHUNKS.map(c => [c.id, c]));
+
+// ================= Preguntas sugeridas y respuestas grabadas =================
+// Las respuestas grabadas solo se muestran si no hay conexión con Claude, y solo si la búsqueda
+// recuperó exactamente los mismos fragmentos sin editar ({c:ID} se convierte en la cita [n]).
+const PRESETS = [
+  { q: "¿Cuánto antes de la incisión hay que poner la cefazolina?",
+    rag: "La cefazolina se administra dentro de los 60 minutos previos a la incisión {c:INF4-3}. Si se usa vancomicina, por alergia grave a betalactámicos, se inicia 120 minutos antes {c:INF4-3}. La hora de administración se registra en la hoja de verificación quirúrgica {c:INF4-3}.",
+    norag: "Según las guías habituales de profilaxis quirúrgica, la cefazolina se administra en los 60 minutos previos a la incisión, y la vancomicina entre 60 y 120 minutos antes. Conviene confirmarlo con el protocolo de tu hospital, porque puede variar." },
+  { q: "¿Cuántas camas libres hay ahora en Medicina Interna?",
+    rag: "Medicina Interna tiene 4 camas libres de 56, con 52 ocupadas, y hay 6 altas previstas para hoy {c:CAMAS-1}. El dato corresponde al corte de hoy a las 07:00.",
+    norag: "No tengo acceso a los sistemas del hospital ni a datos en tiempo real, así que no puedo saber cuántas camas libres hay ahora en Medicina Interna. Te recomiendo consultar el sistema de gestión de camas o a la supervisión de guardia." },
+  { q: "¿Con cuánta antelación tengo que pedir un cambio de guardia?",
+    rag: "Los cambios de guardia se comunican a la jefatura con al menos 48 horas de antelación, a través del portal de Recursos Humanos, y solo entre facultativos de la misma categoría {c:RRHH3-3}.",
+    norag: "Depende del reglamento de cada hospital, pero lo habitual es solicitarlo con unos días de antelación, por escrito, a la jefatura de servicio y con el acuerdo del compañero que te cubre. Consulta el reglamento interno de guardias." },
+  { q: "Un paciente se ha caído en planta, ¿qué hay que hacer?",
+    rag: "Primero hay que valorar al paciente antes de moverlo y avisar al médico de guardia {c:ENF11-3}. Después, notificar la caída en el sistema de notificación de incidentes en menos de 24 horas y repetir la escala de Morse {c:ENF11-3}. Si el resultado es 45 o más, se aplican las medidas de riesgo alto, como cama baja, timbre al alcance y revisión de fármacos sedantes {c:ENF11-2}{c:ENF11-1}.",
+    norag: "Ante una caída: no mover al paciente hasta valorarlo (consciencia, dolor, posibles fracturas o traumatismo craneal), avisar al médico, vigilar constantes y registrar el incidente según el procedimiento de tu centro. Después, revisar el riesgo de caídas y las medidas preventivas." },
+  { q: "¿Puedo pegar el informe de un paciente en un chatbot público?",
+    rag: "No. Está prohibido introducir datos de pacientes, incluidos informes, en herramientas de IA o chatbots públicos no autorizados por el hospital {c:CAL10-1}. Solo pueden usarse las herramientas aprobadas por el Comité de Sistemas, que funcionan en la infraestructura del hospital {c:CAL10-2}.",
+    norag: "No es recomendable: los informes contienen datos de salud protegidos y un chatbot público puede almacenarlos o usarlos fuera del control del hospital. Si necesitas ayuda con un informe, anonimízalo por completo o usa una herramienta aprobada por tu centro." },
+  { q: "¿Cuál es la dosis de paracetamol en insuficiencia hepática?",
+    rag: null,
+    norag: "En insuficiencia hepática se suele recomendar reducir la dosis máxima de paracetamol, habitualmente a no más de 2 g al día, y evitarlo en la insuficiencia grave. Consulta la ficha técnica y ajusta según la situación del paciente." },
+];
+
+// ================= Búsqueda (BM25 simplificado sobre palabras) =================
+const STOP = new Set("a al algo ante antes como con contra cual cuales despues cuando cuanto cuanta cuantos cuantas de del desde donde e el ella ellas ellos en entre era es esa ese eso esta este esto estos estas fue ha hace hacer han hasta hay la las le les lo los mas me mi muy no nos o otra otro para pero poner por porque puede puedo que se segun ser si sin sobre son su sus tambien te tengo tiene tienen todo toda tras tu un una uno unos unas y ya yo ahora".split(" "));
+const ALIAS = { caido: "caida", cae: "caida", caer: "caida", cayo: "caida", chatbot: "chatb", inteligencia: "ia", ia: "ia", antibiotic: "antib" };
+const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+function tokens(s) {
+  return norm(s).split(/[^a-z0-9ñ]+/).filter(w => w && !STOP.has(w)).map(w => {
+    if (ALIAS[w]) return ALIAS[w];
+    let t = w.length > 4 && w.endsWith("s") ? w.slice(0, -1) : w;
+    t = t.slice(0, 5);
+    return ALIAS[t] || t;
+  });
+}
+function search(query, role) {
+  const pool = CHUNKS.filter(c => c.doc.access.includes(role));
+  const docsT = pool.map(c => tokens(c.doc.title + " " + c.text));
+  const avg = docsT.reduce((s, t) => s + t.length, 0) / docsT.length;
+  const df = {}; docsT.forEach(t => new Set(t).forEach(w => df[w] = (df[w] || 0) + 1));
+  const qt = [...new Set(tokens(query))];
+  const N = pool.length, k1 = 1.2, b = 0.75;
+  const scores = {};
+  pool.forEach((c, i) => {
+    const tf = {}; docsT[i].forEach(w => tf[w] = (tf[w] || 0) + 1);
+    let s = 0;
+    for (const w of qt) if (tf[w]) {
+      const idf = Math.log(1 + (N - df[w] + 0.5) / (df[w] + 0.5));
+      s += idf * tf[w] * (k1 + 1) / (tf[w] + k1 * (1 - b + b * docsT[i].length / avg));
+    }
+    scores[c.id] = s;
+  });
+  const ranked = pool.filter(c => scores[c.id] > 0).sort((a, b) => scores[b.id] - scores[a.id]);
+  const best = ranked[0] ? scores[ranked[0].id] : 0;
+  // Se descartan fragmentos muy por debajo del mejor, y todo si el mejor es débil
+  const hits = best < MIN_SCORE ? [] : ranked.filter(c => scores[c.id] >= best * 0.35).slice(0, TOP_K);
+  return { scores, hits, best };
+}
+const TOP_K = 3, MIN_SCORE = 2.2;
+
+// ================= Construcción de la consulta =================
+function buildPrompt(q, role, hits) {
+  const frags = hits.map((c, i) => `[${i + 1}] (${c.doc.code} · ${c.doc.title})\n${c.text}`).join("\n\n");
+  return {
+    parts: [
+      ["p-rule", `Eres el asistente de normativa del Hospital Demo. Responde a la pregunta de un profesional (${ROLES[role]}) usando EXCLUSIVAMENTE los fragmentos de documentos internos que aparecen abajo.\n\nReglas:\n- Si los fragmentos no contienen la respuesta, dilo claramente ("No consta en los documentos disponibles") y sugiere a quién consultar.\n- Cita cada dato con el número del fragmento entre corchetes, por ejemplo [1].\n- Responde en español, en 2 a 5 frases, sin inventar cifras ni añadir conocimiento externo.\n\nFragmentos:\n`],
+      ["p-frag", frags || "(la búsqueda no encontró fragmentos relevantes)"],
+      ["p-q", `\n\nPregunta: ${q}`],
+    ],
+  };
+}
+const promptText = p => p.parts.map(x => x[1]).join("");
+const noRagPrompt = (q, role) => `Eres el asistente del Hospital Demo. Responde en español, en 2 a 5 frases, a la pregunta de un profesional (${ROLES[role]}).\n\nPregunta: ${q}`;
+const NOT_FOUND = "No consta en los documentos disponibles para tu perfil. Consulta con la supervisión o con el servicio responsable del tema.";
+
+// ================= Estado =================
+const S = { role: "med", q: "", result: null, hits: [], open: new Set(), editing: null, preset: null, live: null, ctl: null };
+const $ = id => document.getElementById(id);
+
+// ================= Archivo =================
+function renderLib() {
+  const lib = $("lib"); lib.innerHTML = "";
+  const scores = S.result?.scores || {};
+  let mx = 1e-9; Object.values(scores).forEach(v => mx = Math.max(mx, v));
+  for (const d of DOCS) {
+    const allowed = d.access.includes(S.role);
+    const box = document.createElement("div"); box.className = "doc" + (allowed ? "" : " locked");
+    const head = document.createElement("div"); head.className = "doc-head";
+    head.innerHTML = `<div><span class="kind"></span><span class="t"></span></div><div><span class="code"></span> · <span class="acc"></span></div>`;
+    head.querySelector(".kind").textContent = d.kind;
+    head.querySelector(".t").textContent = d.title;
+    head.querySelector(".code").textContent = d.code;
+    const acc = head.querySelector(".acc");
+    acc.textContent = allowed ? d.access.map(r => ROLES[r]).join(", ") : `Sin acceso para ${ROLES[S.role]}`;
+    if (!allowed) acc.classList.add("lock");
+    box.appendChild(head);
+    const list = document.createElement("div"); list.className = "chunks";
+    for (const c of CHUNKS.filter(c => c.doc === d)) {
+      const rank = S.hits.indexOf(c);
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.dataset.id = c.id;
+      btn.className = "chunk" + (rank >= 0 ? " hit" : "") + (S.open.has(c.id) ? " open" : "");
+      btn.disabled = !allowed;
+      const sc = allowed ? (scores[c.id] || 0) : 0;
+      btn.innerHTML = `<span class="badge"></span><span class="txt"></span><span class="score"><span></span><span class="sbar"><i></i></span></span>`;
+      btn.querySelector(".badge").textContent = rank >= 0 ? rank + 1 : "·";
+      const txt = btn.querySelector(".txt"); txt.textContent = allowed ? c.text : "Contenido no disponible para tu perfil.";
+      if (c.text !== c.original) { const e = document.createElement("span"); e.className = "edited"; e.textContent = " (editado)"; txt.appendChild(e); }
+      btn.querySelector(".score span").textContent = S.result && allowed ? sc.toFixed(1) : "";
+      btn.querySelector(".sbar i").style.width = (S.result && allowed ? (sc / mx) * 100 : 0) + "%";
+      btn.setAttribute("aria-label", `Fragmento de ${d.title}${rank >= 0 ? `, recuperado en posición ${rank + 1}` : ""}`);
+      btn.onclick = () => { S.open.has(c.id) ? S.open.delete(c.id) : S.open.add(c.id); renderLib(); };
+      list.appendChild(btn);
+      if (S.open.has(c.id) && allowed) list.appendChild(editorFor(c));
+    }
+    box.appendChild(list); lib.appendChild(box);
+  }
+}
+
+function editorFor(c) {
+  const wrap = document.createElement("div"); wrap.className = "editor";
+  if (S.editing === c.id) {
+    const ta = document.createElement("textarea"); ta.value = c.text; ta.id = "ed-" + c.id; ta.setAttribute("aria-label", "Texto del fragmento");
+    const row = document.createElement("div"); row.className = "row";
+    const save = Object.assign(document.createElement("button"), { className: "btn primary", type: "button", textContent: "Guardar y volver a preguntar" });
+    const cancel = Object.assign(document.createElement("button"), { className: "btn", type: "button", textContent: "Cancelar" });
+    save.onclick = () => { c.text = ta.value.trim() || c.original; S.editing = null; if (S.q) run(S.q); else renderLib(); };
+    cancel.onclick = () => { S.editing = null; renderLib(); };
+    row.append(save, cancel); wrap.append(ta, row);
+    setTimeout(() => ta.focus(), 0);
+  } else {
+    const row = document.createElement("div"); row.className = "row";
+    const ed = Object.assign(document.createElement("button"), { className: "btn", type: "button", textContent: "Editar este fragmento" });
+    ed.onclick = () => { S.editing = c.id; renderLib(); };
+    row.appendChild(ed);
+    if (c.text !== c.original) {
+      const rs = Object.assign(document.createElement("button"), { className: "btn", type: "button", textContent: "Restaurar original" });
+      rs.onclick = () => { c.text = c.original; if (S.q) run(S.q); else renderLib(); };
+      row.appendChild(rs);
+    }
+    const hint = Object.assign(document.createElement("span"), { className: "note", textContent: "Prueba a cambiar un dato y vuelve a preguntar." });
+    row.appendChild(hint); wrap.appendChild(row);
+  }
+  return wrap;
+}
+
+function flashChunk(id) {
+  if (!S.open.has(id)) { S.open.add(id); renderLib(); }
+  const el = document.querySelector(`.chunk[data-id="${id}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1600);
+}
+
+// ================= Consulta y respuesta =================
+function renderPrompt(p) {
+  const pre = $("prompt"); pre.innerHTML = "";
+  for (const [cls, txt] of p.parts) { const s = document.createElement("span"); s.className = cls; s.textContent = txt; pre.appendChild(s); }
+  const t = promptText(p);
+  $("psize").textContent = `${t.length.toLocaleString("es-ES")} caracteres · ${S.hits.length} fragmento${S.hits.length === 1 ? "" : "s"}`;
+}
+
+// Pinta la respuesta convirtiendo [n] en botones que señalan el fragmento citado
+function renderAnswer(el, text, hits) {
+  el.className = "body"; el.innerHTML = "";
+  const parts = text.split(/(\[\d+\])/g);
+  for (const part of parts) {
+    const m = part.match(/^\[(\d+)\]$/);
+    if (m && hits[+m[1] - 1]) {
+      const c = hits[+m[1] - 1];
+      const b = document.createElement("button"); b.className = "cite"; b.type = "button"; b.textContent = m[1];
+      b.title = `${c.doc.title}: ${c.text}`; b.setAttribute("aria-label", `Ver fuente ${m[1]}: ${c.doc.title}`);
+      b.onclick = () => flashChunk(c.id);
+      el.appendChild(b);
+    } else el.appendChild(document.createTextNode(part));
+  }
+}
+const recorded = (tpl, hits) => tpl.replace(/\{c:([A-Z0-9]+-\d+)\}/g, (_, id) => ` [${hits.indexOf(byId[id]) + 1}]`).replace(/\s+\[/g, " [").replace(/\] \[/g, "][");
+const thinking = (el, msg = "Pensando…") => { el.className = "body thinking"; el.textContent = msg; };
+
+function setStep(n, busy) {
+  for (let i = 1; i <= 4; i++) { const s = $("st" + i); s.classList.toggle("on", i <= n); s.classList.toggle("busy", i === n && !!busy); }
+}
+const wait = ms => new Promise(r => setTimeout(r, matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ms));
+
+const ERR = {
+  not_granted: "No se ha dado permiso para consultar a Claude desde esta página.",
+  rate_limited: "Demasiadas consultas seguidas. Espera un momento y vuelve a intentarlo.",
+  session_expired: "Tu sesión de Claude ha caducado. Vuelve a iniciar sesión.",
+  refused: "Claude no ha respondido a esta pregunta. Prueba a formularla de otra manera.",
+};
+const PERMANENT = new Set(["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"]);
+
+async function ask(prompt, bodyEl, tagEl, hits) {
+  const sample = S.live;
+  if (!sample) return false;
+  S.ctl?.abort(); const ctl = S.ctl = new AbortController();
+  $("stopBtn").hidden = false;
+  tagEl.className = "tag live"; tagEl.textContent = "Claude en vivo";
+  thinking(bodyEl);
+  try {
+    const { text, truncated } = await sample(prompt, { modelTier: "quick", signal: ctl.signal, onText: ({ text }) => renderAnswer(bodyEl, text, hits) });
+    renderAnswer(bodyEl, text + (truncated ? "\n(Respuesta cortada por longitud.)" : ""), hits);
+    return true;
+  } catch (e) {
+    if (e?.code === "cancelled") { if (e.text) renderAnswer(bodyEl, e.text + " (detenido)", hits); else thinking(bodyEl, "Detenido."); return true; }
+    if (PERMANENT.has(e?.code)) { S.live = null; setLive(false); return false; }
+    if (e?.text && e.code !== "refused") { renderAnswer(bodyEl, e.text + " (interrumpido)", hits); return true; }
+    bodyEl.className = "body thinking"; bodyEl.textContent = ERR[e?.code] || "No se pudo completar la respuesta. Vuelve a intentarlo.";
+    return true;
+  } finally {
+    if (S.ctl === ctl) { $("stopBtn").hidden = true; S.ctl = null; }
+  }
+}
+
+function verdictFor(bodyEl) {
+  const v = $("ragVerdict"); v.hidden = false;
+  if (!S.hits.length) { v.className = "verdict warn"; v.textContent = "La búsqueda no encontró nada relevante, así que el sistema responde que no consta en lugar de dejar que el modelo improvise."; return; }
+  const cited = bodyEl.querySelectorAll(".cite").length;
+  if (cited) { v.className = "verdict ok"; v.textContent = "Cada dato lleva su fuente. Toca un número para ver el párrafo original."; }
+  else { v.className = "verdict warn"; v.textContent = "La respuesta no cita fragmentos. Compruébala en el archivo antes de usarla."; }
+}
+
+async function run(q, preset = PRESETS.find(p => p.q === q) || null) {
+  q = q.trim(); if (!q) return;
+  S.q = q; S.preset = preset; $("q").value = q;
+  $("ansNo").hidden = true; $("answers").classList.remove("two");
+  $("ragVerdict").hidden = true;
+  const body = $("ragBody"), tag = $("ragTag");
+  tag.className = "tag"; tag.textContent = ""; thinking(body, "Buscando en el archivo…");
+  $("askBtn").disabled = true;
+  try {
+    setStep(1, true); await wait(350);
+    S.result = search(q, S.role); S.hits = S.result.hits;
+    setStep(2, true); renderLib(); await wait(650);
+    const p = buildPrompt(q, S.role, S.hits);
+    setStep(3, true); renderPrompt(p); await wait(500);
+    setStep(4, true);
+    if (!S.hits.length) {
+      tag.className = "tag"; tag.textContent = "sin llamar al LLM";
+      renderAnswer(body, NOT_FOUND, []); verdictFor(body); return;
+    }
+    const pristine = S.hits.every(c => c.text === c.original);
+    const canRecord = preset?.rag && pristine && preset.expect && preset.expect[S.role] === S.hits.map(c => c.id).join(",");
+    const ok = await ask(promptText(p), body, tag, S.hits);
+    if (ok) { verdictFor(body); return; }
+    if (canRecord) {
+      tag.className = "tag rec"; tag.textContent = "respuesta grabada de ejemplo";
+      renderAnswer(body, recorded(preset.rag, S.hits), S.hits); verdictFor(body);
+    } else {
+      tag.className = "tag rec"; tag.textContent = "sin conexión";
+      body.className = "body thinking";
+      body.textContent = "Para responder a esta pregunta hace falta consultar a Claude en vivo: abre la página en Claude y acepta el permiso. Los pasos 2 y 3 (búsqueda y consulta) sí puedes verlos arriba.";
+    }
+  } finally {
+    setStep(4, false); $("askBtn").disabled = false;
+  }
+}
+
+async function compare() {
+  if (!S.q) return;
+  $("ansNo").hidden = false; $("answers").classList.add("two");
+  const body = $("noBody"), tag = $("noTag");
+  $("noVerdict").textContent = "Sin documentos, el modelo responde con conocimiento general: no conoce los datos ni las normas propias del hospital y no puede citar ninguna fuente.";
+  const ok = await ask(noRagPrompt(S.q, S.role), body, tag, []);
+  if (ok) return;
+  if (S.preset) { tag.className = "tag rec"; tag.textContent = "respuesta grabada de ejemplo"; renderAnswer(body, S.preset.norag, []); }
+  else { tag.className = "tag rec"; tag.textContent = "sin conexión"; thinking(body, "Esta comparación necesita consultar a Claude en vivo."); }
+}
+
+// ================= Controles =================
+for (const [k, label] of Object.entries(ROLES)) {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.dataset.role = k;
+  b.setAttribute("aria-pressed", k === S.role);
+  b.onclick = () => { S.role = k; [...$("roles").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.role === k)); if (S.q) run(S.q, S.preset); else renderLib(); };
+  $("roles").appendChild(b);
+}
+PRESETS.forEach(p => {
+  const b = document.createElement("button"); b.type = "button"; b.textContent = p.q;
+  b.onclick = () => run(p.q, p); $("presets").appendChild(b);
+});
+$("qform").onsubmit = e => { e.preventDefault(); run($("q").value); };
+$("cmpBtn").onclick = compare;
+$("stopBtn").onclick = () => S.ctl?.abort();
+
+function setLive(on) {
+  const el = $("live");
+  el.className = "live " + (on ? "on" : "off");
+  el.textContent = on ? "Claude en vivo: disponible" : "Sin conexión con Claude: respuestas grabadas";
+}
+
+// Respuestas grabadas: se registra qué fragmentos se esperaba recuperar para cada perfil
+PRESETS.forEach(p => {
+  if (!p.rag) return;
+  p.expect = {};
+  for (const r of Object.keys(ROLES)) p.expect[r] = search(p.q, r).hits.map(c => c.id).join(",");
+});
+window.__rag = { search, PRESETS, CHUNKS };
+
+// ================= Arranque =================
+// La primera pregunta se muestra con su respuesta grabada; no se consulta a Claude sin que el usuario lo pida.
+(async () => {
+  const p = PRESETS[0];
+  const saved = S.live; S.live = null;
+  await run(p.q, p);
+  S.live = saved;
+  try {
+    const sample = await window.claude?.use?.("sample");
+    S.live = sample || null;
+  } catch { S.live = null; }
+  setLive(!!S.live);
+})();
+})();
+</script>
+</body>
+</html>
