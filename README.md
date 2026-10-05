@@ -21,6 +21,10 @@ Demo interactiva de un asistente RAG + LLM sobre la normativa y los datos de un 
 
 Publicada como artifact de Claude, responde en vivo con Claude (con permiso del usuario). Abierta como archivo local, usa respuestas grabadas para las preguntas sugeridas.
 
+## Un paciente, tres sistemas (`fhir/`)
+
+Demo interactiva de las ventajas de la interoperabilidad con HL7 FHIR, ambientada en Bolivia con datos sintéticos. María, de 67 años, llega a Urgencias con sus antecedentes repartidos entre un centro de salud, un laboratorio y el hospital. Un interruptor compara el caso sin interoperabilidad (reacción alérgica a la penicilina y una HbA1c repetida) con el caso con FHIR (alerta de alergia y prueba evitada). Incluye los "Rayos X" de cada dato (recursos FHIR R4 con códigos SNOMED CT, LOINC, CIE-10 y UCUM), el tráfico REST simulado entre sistemas, una comparación HL7 v2 frente a FHIR, un guion de 7 pasos y un botón para reiniciar el caso.
+
 ## Reentrenar la red (`training/`)
 
 ```bash

@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Un paciente, tres sistemas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;600&family=Silkscreen&display=swap">
+<style>
+/* Layout: misma consola de la serie "Inducción en IA". Arriba el guion y el interruptor; los tres sistemas en fila;
+   en el centro la pantalla de Urgencias con el panel de Rayos X al lado; abajo HL7 v2 frente a FHIR, ventajas y glosario. */
+:root {
+  color-scheme: dark;
+  --bg: #04060c;
+  --panel: #0a1122;
+  --panel-2: #0e1830;
+  --line: #1a2a4f;
+  --fg: #d5e0f5;
+  --muted: #7d8db3;
+  --accent: #3d8bff;
+  --accent-hi: #9fd8ff;
+  --ok: #4fd1a5;
+  --warn: #ffcf5a;
+  --bad: #ff7a7a;
+  --ref: #c9a2ff;
+  --font-pixel: "Silkscreen", "Courier New", monospace;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font-body); padding-inline: 16px; padding-block: 0 48px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 700; }
+p { margin: 0; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 2px; }
+
+header { padding-block: 28px 4px; display: grid; gap: 12px; }
+.eyebrow { font-family: var(--font-pixel); font-size: 12px; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; }
+header h1 { font-family: var(--font-pixel); font-weight: 400; font-size: clamp(28px, 5vw, 48px); line-height: 1.05; color: var(--accent-hi); }
+header .lede { max-width: 72ch; font-size: 17px; }
+.note { font-size: 13.5px; color: var(--muted); }
+
+.panel { background: var(--panel); border: 1px solid var(--line); padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; transition: border-color .3s, box-shadow .3s; }
+.panel.focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 32px -8px var(--accent); }
+.panel-title { font-family: var(--font-pixel); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-hi); display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.panel-title small { font-family: var(--font-body); text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 13px; }
+.clinic { font-size: 14px; color: var(--muted); border-left: 2px solid var(--ok); padding-left: 10px; }
+.clinic b { color: var(--ok); }
+
+.btn { background: var(--panel-2); border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; font-size: 14px; line-height: 1.25; text-align: left; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #031026; font-weight: 700; }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.good { border-color: var(--ok); color: var(--ok); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Guion + interruptor */
+.control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; background: var(--panel-2); }
+.tour { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; }
+.tour-n { font-family: var(--font-pixel); font-size: 34px; color: var(--accent); line-height: 1; min-width: 2ch; text-align: center; }
+.tour h2 { font-size: 19px; }
+.tour-nav { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.dots { display: flex; gap: 5px; }
+.dots span { width: 8px; height: 8px; background: var(--line); }
+.dots span.on { background: var(--accent); }
+.switch { display: grid; gap: 8px; justify-items: end; }
+.seg { display: inline-flex; border: 1px solid var(--line); }
+.seg button { background: transparent; border: 0; padding: 10px 16px; cursor: pointer; font-size: 15px; color: var(--muted); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"].off { background: #3a1420; color: var(--bad); }
+.seg button[aria-pressed="true"].on { background: #0f3a2e; color: var(--ok); }
+
+/* Sistemas */
+.systems { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.sys { border: 1px solid var(--line); background: var(--panel); padding: 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.sys-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.sys-head b { font-size: 15px; }
+.conn { font-family: var(--font-mono); font-size: 11.5px; padding: 2px 8px; border: 1px solid; white-space: nowrap; }
+.conn.off { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.conn.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.sys pre { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; color: var(--muted); background: #050a17; border: 1px dashed var(--line); padding: 8px; }
+.sys .id { font-family: var(--font-mono); font-size: 12px; color: var(--ref); }
+
+/* Urgencias */
+.main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.er { background: #060c1b; }
+.banner { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; padding: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.banner .who { font-size: 20px; font-weight: 700; }
+.banner .meta { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+.banner .why { grid-column: 1 / -1; font-size: 14.5px; }
+.score { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kpi { border: 1px solid var(--line); padding: 8px 10px; display: grid; gap: 2px; }
+.kpi .v { font-family: var(--font-mono); font-weight: 600; font-size: 16px; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: 12px; color: var(--muted); }
+.kpi.good .v { color: var(--ok); } .kpi.bad .v { color: var(--bad); } .kpi.warn .v { color: var(--warn); }
+.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); padding: 10px 12px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.card h3 { font-family: var(--font-pixel); font-weight: 400; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.card.alert-card.has { border-color: var(--bad); }
+.card.alert-card.has h3 { color: var(--bad); }
+.empty { font-size: 14px; color: var(--muted); font-style: italic; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 4px 6px; margin-inline: -6px; background: transparent; border: 0; text-align: left; cursor: pointer; width: calc(100% + 12px); }
+.item:hover { background: #0e1a38; }
+.item .src { font-family: var(--font-mono); font-size: 11px; color: var(--ok); white-space: nowrap; }
+.item.sel { background: #10244d; outline: 1px solid var(--accent); }
+.item .code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.wide { grid-column: 1 / -1; }
+#chart { width: 100%; height: auto; display: block; }
+#chart text { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+.orders { display: grid; gap: 6px; }
+.flag { padding: 10px 12px; border: 1px solid; display: grid; gap: 8px; font-size: 14.5px; }
+.flag.bad { border-color: var(--bad); color: var(--fg); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.flag.bad b { color: var(--bad); }
+.flag.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.flag.warn b { color: var(--warn); }
+.flag.ok { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 8%, transparent); }
+.flag.ok b { color: var(--ok); }
+.log { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); display: grid; gap: 2px; max-height: 140px; overflow: auto; }
+.log span b { color: var(--fg); font-weight: 600; }
+
+/* Rayos X */
+.right { display: grid; gap: 16px; min-width: 0; position: sticky; top: 12px; }
+.tabs { display: inline-flex; border: 1px solid var(--line); }
+.tabs button { background: transparent; border: 0; padding: 6px 12px; cursor: pointer; font-size: 13.5px; color: var(--muted); }
+.tabs button + button { border-left: 1px solid var(--line); }
+.tabs button[aria-selected="true"] { background: #10244d; color: var(--accent-hi); }
+.req { font-family: var(--font-mono); font-size: 12.5px; padding: 6px 10px; background: #050a17; border: 1px solid var(--line); word-break: break-all; }
+.req .m { color: var(--ok); font-weight: 600; }
+.json { margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; background: #050a17; border: 1px solid var(--line); padding: 12px; max-height: 420px; overflow: auto; color: var(--muted); }
+.k-type { color: var(--accent-hi); }
+.k-code { color: var(--ok); }
+.k-val { color: var(--warn); }
+.k-ref { color: var(--ref); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+.explain { font-size: 14.5px; }
+.traffic { display: grid; gap: 4px; }
+.traffic button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: baseline; background: #050a17; border: 1px solid var(--line); padding: 6px 8px; cursor: pointer; text-align: left; font-family: var(--font-mono); font-size: 12px; opacity: 0; transform: translateY(4px); transition: opacity .3s, transform .3s; }
+.traffic button.in { opacity: 1; transform: none; }
+.traffic button:hover { border-color: var(--accent); }
+.traffic .m { color: var(--ok); font-weight: 600; }
+.traffic .u { word-break: break-all; color: var(--fg); }
+.traffic .s { color: var(--ok); }
+.traffic .who { grid-column: 2 / -1; color: var(--muted); font-family: var(--font-body); font-size: 12px; }
+
+/* v2 vs FHIR */
+.vs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.vs pre { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; background: #050a17; border: 1px solid var(--line); padding: 12px; color: var(--fg); }
+.vs h3 { font-size: 16px; }
+.vs > div { align-content: start; }
+.pros { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.pros .panel p { font-size: 15px; }
+.gloss { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 15px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-pixel); font-weight: 400; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-hi); }
+td:first-child { font-weight: 700; white-space: nowrap; }
+td:last-child { color: var(--ok); }
+footer { font-size: 13px; color: var(--muted); }
+
+@media (max-width: 1000px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .right { position: static; }
+  .systems { grid-template-columns: minmax(0, 1fr); }
+  .vs { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .control { grid-template-columns: minmax(0, 1fr); }
+  .switch { justify-items: start; }
+  .cards { grid-template-columns: minmax(0, 1fr); }
+  .score { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .banner { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Inducción en IA · Interoperabilidad con HL7 FHIR</div>
+  <h1>Un paciente, tres sistemas</h1>
+  <p class="lede">María llega a Urgencias y su historia está repartida entre su centro de salud, un laboratorio y el hospital. Compara lo que ve el médico de guardia cuando esos sistemas no se hablan y cuando comparten la información con el estándar <b>HL7 FHIR</b>.</p>
+  <p class="note">Paciente, establecimientos, identificadores y resultados son ficticios, creados para esta formación. Los recursos siguen el formato FHIR R4.</p>
+</header>
+
+<section class="panel control" aria-label="Guion y modo">
+  <div class="tour">
+    <div class="tour-n" id="tourN">1</div>
+    <div>
+      <h2 id="tourT"></h2>
+      <p id="tourP"></p>
+      <div class="tour-nav">
+        <button class="btn" id="tourPrev" type="button" aria-label="Paso anterior">◀</button>
+        <div class="dots" id="dots"></div>
+        <button class="btn primary" id="tourNext" type="button">Siguiente ▶</button>
+      </div>
+    </div>
+  </div>
+  <div class="switch">
+    <div class="seg" role="group" aria-label="Modo de interoperabilidad">
+      <button type="button" class="off" id="modeOff" aria-pressed="true">Sin interoperabilidad</button>
+      <button type="button" class="on" id="modeOn" aria-pressed="false">Con HL7 FHIR</button>
+    </div>
+    <button class="btn" id="resetBtn" type="button">↺ Reiniciar caso</button>
+  </div>
+</section>
+
+<section class="systems" id="pSys" aria-label="Los tres sistemas">
+  <div class="sys">
+    <div class="sys-head"><b>Centro de Salud Demo · El Alto</b><span class="conn off" data-conn>sin conexión</span></div>
+    <span class="note">Primer nivel. Ficha clínica propia desde 2015.</span>
+    <pre>ALERGIAS: penicilina (ronchas y ahogo, 2019)
+DX: DM2 · HTA
+TTO: metformina 850 c/12h, enalapril 10 c/24h</pre>
+    <span class="id">Su número de paciente: 1001</span>
+  </div>
+  <div class="sys">
+    <div class="sys-head"><b>Laboratorio Demo</b><span class="conn off" data-conn>sin conexión</span></div>
+    <span class="note">Laboratorio privado. Entrega informes en PDF.</span>
+    <pre>21/09/2026  GLU    11,2 mmol/L  (H)
+21/09/2026  HbA1c   8,1 %       (H)
+02/08/2026  GLU    10,6 mmol/L  (H)
+10/06/2026  GLU     9,4 mmol/L  (H)</pre>
+    <span class="id">Su número de paciente: L-77812</span>
+  </div>
+  <div class="sys">
+    <div class="sys-head"><b>Hospital Demo · La Paz</b><span class="conn off" data-conn>sin conexión</span></div>
+    <span class="note">Tercer nivel. María nunca se había atendido aquí.</span>
+    <pre>INGRESO URGENCIAS 05/10/2026 09:40
+Glucemia capilar: 312 mg/dL
+T: 39,2 °C · SatO2 91 %</pre>
+    <span class="id">Su número de paciente: H-55120</span>
+  </div>
+</section>
+<p class="clinic" style="margin-top:-8px"><b>Fíjate:</b> cada sistema le da a María un número distinto. Lo único que comparten es su cédula de identidad (CI 4829173 LP). Con FHIR, ese identificador común permite reconocer que los tres registros son la misma persona.</p>
+
+<section class="main">
+  <div class="panel er" id="pER">
+    <div class="panel-title">Urgencias · Hospital Demo <small>pantalla del médico de guardia</small></div>
+    <div class="banner">
+      <div><div class="who">María Quispe Mamani</div><div class="meta">CI 4829173 LP · 67 años · mujer · Box 4</div></div>
+      <div class="meta" id="mode-label"></div>
+      <p class="why"><b>Motivo:</b> fiebre de 39,2 °C, tos productiva y confusión desde ayer. Sospecha de neumonía. La hija no sabe detallar antecedentes ni medicación.</p>
+    </div>
+    <div class="score" id="score"></div>
+    <div class="cards">
+      <div class="card alert-card" id="cAllergy"><h3>Alergias</h3><div id="allergy"></div></div>
+      <div class="card"><h3>Problemas de salud</h3><div id="problems"></div></div>
+      <div class="card"><h3>Medicación habitual</h3><div id="meds"></div></div>
+      <div class="card"><h3>Laboratorio previo</h3><div id="labs"></div></div>
+      <div class="card wide"><h3>Glucemia (mg/dL)</h3><svg id="chart" viewBox="0 0 600 190" role="img" aria-label="Evolución de la glucemia"></svg><div id="chartNote" class="note"></div></div>
+      <div class="card wide" id="cOrders">
+        <h3>Indicaciones</h3>
+        <div class="orders">
+          <div class="row">
+            <button class="btn" id="oAmox" type="button">Indicar amoxicilina/ácido clavulánico 875/125 mg VO c/12 h</button>
+            <button class="btn" id="oLevo" type="button">Indicar levofloxacino 750 mg VO c/24 h</button>
+            <button class="btn" id="oHba" type="button">Solicitar HbA1c</button>
+          </div>
+          <div id="flags" style="display:grid;gap:8px"></div>
+          <div class="log" id="log" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="panel" id="pXray">
+      <div class="panel-title">Por dentro
+        <span class="tabs" role="tablist">
+          <button type="button" role="tab" id="tabX" aria-selected="true">Rayos X del dato</button>
+          <button type="button" role="tab" id="tabT" aria-selected="false">Tráfico entre sistemas</button>
+        </span>
+      </div>
+      <div id="xray">
+        <div style="display:grid;gap:10px">
+          <p class="explain" id="xExplain"></p>
+          <div class="req" id="xReq" hidden></div>
+          <pre class="json" id="xJson"></pre>
+          <div class="legend" id="xLegend">
+            <span><i style="background:var(--accent-hi)"></i>qué tipo de dato es</span>
+            <span><i style="background:var(--ok)"></i>código estándar</span>
+            <span><i style="background:var(--warn)"></i>valor y unidad</span>
+            <span><i style="background:var(--ref)"></i>de quién es</span>
+          </div>
+        </div>
+      </div>
+      <div id="traffic" hidden>
+        <div style="display:grid;gap:10px">
+          <p class="explain" id="tExplain"></p>
+          <div class="traffic" id="tList"></div>
+        </div>
+      </div>
+      <p class="clinic"><b>En pocas palabras:</b> FHIR define formularios estándar ("recursos") para cada tipo de dato, como alergia, diagnóstico o resultado de laboratorio, y una forma común de pedirlos por internet. Cualquier sistema que hable FHIR entiende a los demás.</p>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="pVs">
+  <div class="panel-title">Antes y ahora <small>el mismo resultado de glucosa, en dos generaciones del estándar</small></div>
+  <div class="vs">
+    <div style="display:grid;gap:8px;min-width:0">
+      <h3>HL7 versión 2 (desde los años 90)</h3>
+      <pre id="v2"></pre>
+      <p class="note">Campos separados por barras. Muy extendido, pero cada integración se negocia a medida y hace falta un especialista para leerlo.</p>
+    </div>
+    <div style="display:grid;gap:8px;min-width:0">
+      <h3>HL7 FHIR (recurso Observation)</h3>
+      <pre class="json" id="fhirObs" style="max-height:none"></pre>
+      <p class="note">Usa la misma tecnología que la web (internet, JSON). Cada dato tiene nombre, los códigos son estándar y se puede pedir solo lo que hace falta.</p>
+    </div>
+  </div>
+</section>
+
+<section class="pros">
+  <div class="panel"><div class="panel-title">Seguridad del paciente</div><p>La alergia registrada en el centro de salud llega a Urgencias y dispara una alerta antes de administrar el antibiótico. Sin el dato, la ausencia de información se confunde con la ausencia de alergia.</p></div>
+  <div class="panel"><div class="panel-title">Continuidad asistencial</div><p>Diagnósticos, medicación y resultados acompañan al paciente entre niveles de atención, desde el centro de salud de primer nivel hasta el hospital de tercer nivel, sin depender de que el paciente lleve papeles o recuerde.</p></div>
+  <div class="panel"><div class="panel-title">Menos pruebas repetidas</div><p>La HbA1c de hace dos semanas ya está disponible. Evitar repetirla ahorra extracciones, reactivos y tiempo, y reduce las molestias para el paciente.</p></div>
+  <div class="panel"><div class="panel-title">Datos que se pueden analizar</div><p>Con códigos estándar (LOINC, SNOMED CT, CIE-10) los datos de distintos establecimientos se pueden sumar para la vigilancia epidemiológica, la gestión y la IA, como las de las otras demos de esta formación.</p></div>
+  <div class="panel"><div class="panel-title">Aplicaciones conectadas</div><p>Una app hecha para FHIR (SMART on FHIR) funciona con cualquier sistema que hable el estándar: calculadoras de riesgo, portales del paciente o recordatorios, sin integraciones a medida.</p></div>
+  <div class="panel"><div class="panel-title">Lo que no resuelve solo</div><p>FHIR es el idioma común, pero hacen falta acuerdos: un identificador único de paciente, qué códigos usa el país (un "perfil" o guía de implementación), consentimiento, seguridad y que los profesionales registren bien.</p></div>
+</section>
+
+<section class="panel">
+  <div class="panel-title">Glosario <small>la jerga, en una línea</small></div>
+  <div class="gloss">
+    <table>
+      <thead><tr><th>Término</th><th>Qué es</th><th>En esta demo</th></tr></thead>
+      <tbody>
+        <tr><td>Interoperabilidad</td><td>Que sistemas distintos intercambien datos y los entiendan igual.</td><td>Los tres sistemas compartiendo la historia de María.</td></tr>
+        <tr><td>HL7</td><td>Organización que publica estándares para intercambiar datos de salud.</td><td>Autora tanto de HL7 v2 como de FHIR.</td></tr>
+        <tr><td>FHIR</td><td>Estándar moderno de HL7 basado en recursos y tecnología web.</td><td>El modo "Con HL7 FHIR".</td></tr>
+        <tr><td>Recurso</td><td>Formulario estándar para un tipo de dato.</td><td>Patient, AllergyIntolerance, Condition, Observation…</td></tr>
+        <tr><td>API REST</td><td>Forma de pedir datos a otro sistema por internet.</td><td>Las líneas "GET" de la pestaña de tráfico.</td></tr>
+        <tr><td>Identificador</td><td>Número que reconoce a la persona en todos los sistemas.</td><td>La cédula de identidad (CI).</td></tr>
+        <tr><td>LOINC</td><td>Catálogo de códigos para pruebas de laboratorio y mediciones.</td><td>Glucosa (14749-6) y HbA1c (4548-4).</td></tr>
+        <tr><td>SNOMED CT</td><td>Terminología clínica para diagnósticos, hallazgos y sustancias.</td><td>Penicilina, diabetes, urticaria.</td></tr>
+        <tr><td>CIE-10</td><td>Clasificación de enfermedades de la OMS.</td><td>E11 (diabetes tipo 2) e I10 (hipertensión).</td></tr>
+        <tr><td>UCUM</td><td>Forma estándar de escribir las unidades de medida.</td><td>mmol/L y mg/dL, para convertir sin errores.</td></tr>
+        <tr><td>Perfil (guía de implementación)</td><td>Reglas de un país o red sobre cómo usar FHIR.</td><td>Qué identificador y qué códigos son obligatorios.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>Demo de formación. No usa ningún sistema real: el "servidor FHIR" de cada establecimiento está simulado dentro de esta página.</footer>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const CI = { system: "urn:demo:bolivia:ci", value: "4829173-LP" };
+const MGDL = 18.016; // glucosa: mmol/L → mg/dL
+
+// ================= Recursos FHIR R4 de cada sistema =================
+const ref = (sys, id) => ({ reference: `${sys}/Patient/${id}`, display: "María Quispe Mamani" });
+const PATIENT_CS = { resourceType: "Patient", id: "1001", identifier: [{ system: "urn:demo:centro-salud:paciente", value: "1001" }, { ...CI, type: { text: "Cédula de identidad" } }], name: [{ family: "Quispe Mamani", given: ["María"] }], gender: "female", birthDate: "1959-03-14" };
+const ALLERGY = { resourceType: "AllergyIntolerance", id: "al-1", clinicalStatus: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical", code: "active" }] }, verificationStatus: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification", code: "confirmed" }] }, category: ["medication"], criticality: "high",
+  code: { coding: [{ system: "http://snomed.info/sct", code: "764146007", display: "Penicillin" }], text: "Penicilina" },
+  patient: ref("cs", "1001"), recordedDate: "2019-03-12",
+  reaction: [{ manifestation: [{ coding: [{ system: "http://snomed.info/sct", code: "126485001", display: "Urticaria" }], text: "Urticaria" }, { coding: [{ system: "http://snomed.info/sct", code: "267036007", display: "Dyspnea" }], text: "Dificultad respiratoria" }], severity: "severe" }] };
+const COND_DM = { resourceType: "Condition", id: "cond-1", clinicalStatus: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }] },
+  code: { coding: [{ system: "http://snomed.info/sct", code: "44054006", display: "Diabetes mellitus type 2" }, { system: "http://hl7.org/fhir/sid/icd-10", code: "E11", display: "Diabetes mellitus tipo 2" }], text: "Diabetes mellitus tipo 2" },
+  subject: ref("cs", "1001"), onsetDateTime: "2016-05-20" };
+const COND_HTA = { resourceType: "Condition", id: "cond-2", clinicalStatus: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/condition-clinical", code: "active" }] },
+  code: { coding: [{ system: "http://snomed.info/sct", code: "38341003", display: "Hypertensive disorder" }, { system: "http://hl7.org/fhir/sid/icd-10", code: "I10", display: "Hipertensión esencial" }], text: "Hipertensión arterial" },
+  subject: ref("cs", "1001"), onsetDateTime: "2018-11-02" };
+const med = (id, atc, name, dose) => ({ resourceType: "MedicationStatement", id, status: "active",
+  medicationCodeableConcept: { coding: [{ system: "http://www.whocc.no/atc", code: atc, display: name }], text: name },
+  subject: ref("cs", "1001"), dosage: [{ text: dose }] });
+const MED_MET = med("med-1", "A10BA02", "Metformina 850 mg", "1 comprimido cada 12 horas");
+const MED_ENA = med("med-2", "C09AA02", "Enalapril 10 mg", "1 comprimido cada 24 horas");
+const obs = (id, loinc, display, value, unit, date, high) => ({ resourceType: "Observation", id, status: "final",
+  category: [{ coding: [{ system: "http://terminology.hl7.org/CodeSystem/observation-category", code: "laboratory" }] }],
+  code: { coding: [{ system: "http://loinc.org", code: loinc, display }] },
+  subject: ref("lab", "L-77812"), effectiveDateTime: date,
+  valueQuantity: { value, unit, system: "http://unitsofmeasure.org", code: unit },
+  interpretation: [{ coding: [{ system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation", code: high ? "H" : "N" }] }] });
+const GLU = [
+  obs("glu-1", "14749-6", "Glucose [Moles/volume] in Serum or Plasma", 9.4, "mmol/L", "2026-06-10T07:30:00-04:00", true),
+  obs("glu-2", "14749-6", "Glucose [Moles/volume] in Serum or Plasma", 10.6, "mmol/L", "2026-08-02T07:45:00-04:00", true),
+  obs("glu-3", "14749-6", "Glucose [Moles/volume] in Serum or Plasma", 11.2, "mmol/L", "2026-09-21T07:30:00-04:00", true),
+];
+const HBA1C = obs("hba-1", "4548-4", "Hemoglobin A1c/Hemoglobin.total in Blood", 8.1, "%", "2026-09-21T07:30:00-04:00", true);
+const GLU_ER = { ...obs("glu-er", "2339-0", "Glucose [Mass/volume] in Blood", 312, "mg/dL", "2026-10-05T09:40:00-04:00", true), subject: ref("hospital", "H-55120"),
+  category: [{ coding: [{ system: "http://terminology.hl7.org/CodeSystem/observation-category", code: "vital-signs" }], text: "Glucemia capilar" }] };
+const bundle = arr => ({ resourceType: "Bundle", type: "searchset", total: arr.length, entry: arr.map(r => ({ resource: r })) });
+
+const BASE = { cs: "https://centrosalud.demo/fhir", lab: "https://laboratorio.demo/fhir" };
+const TRAFFIC = [
+  { who: "Hospital → Centro de Salud: ¿quién es la persona con esta CI?", url: `${BASE.cs}/Patient?identifier=${CI.system}|${CI.value}`, res: bundle([PATIENT_CS]) },
+  { who: "Hospital → Centro de Salud: alergias de la paciente 1001", url: `${BASE.cs}/AllergyIntolerance?patient=1001`, res: bundle([ALLERGY]) },
+  { who: "Hospital → Centro de Salud: problemas de salud activos", url: `${BASE.cs}/Condition?patient=1001&clinical-status=active`, res: bundle([COND_DM, COND_HTA]) },
+  { who: "Hospital → Centro de Salud: medicación habitual", url: `${BASE.cs}/MedicationStatement?patient=1001&status=active`, res: bundle([MED_MET, MED_ENA]) },
+  { who: "Hospital → Laboratorio: resultados de glucosa y HbA1c por CI", url: `${BASE.lab}/Observation?subject:Patient.identifier=${CI.system}|${CI.value}&code=http://loinc.org|14749-6,http://loinc.org|4548-4`, res: bundle([...GLU, HBA1C]) },
+];
+const reqFor = r => {
+  if (r === ALLERGY) return TRAFFIC[1].url;
+  if (r.resourceType === "Condition") return TRAFFIC[2].url;
+  if (r.resourceType === "MedicationStatement") return TRAFFIC[3].url;
+  if (r === GLU_ER) return "(dato propio del hospital, registrado en Urgencias)";
+  return TRAFFIC[4].url;
+};
+
+// ================= Rayos X: JSON coloreado según el papel de cada campo =================
+const ROLE = { resourceType: "k-type", code: "k-code", medicationCodeableConcept: "k-code", manifestation: "k-code",
+  valueQuantity: "k-val", value: "k-val", unit: "k-val", dosage: "k-val", criticality: "k-val", severity: "k-val",
+  subject: "k-ref", patient: "k-ref", identifier: "k-ref", name: "k-ref" };
+const FIRST = ["resourceType", "id", "type", "total", "code", "medicationCodeableConcept", "valueQuantity", "criticality", "reaction", "dosage", "subject", "patient", "identifier", "name", "effectiveDateTime", "recordedDate", "onsetDateTime"];
+const rank = k => { const i = FIRST.indexOf(k); return i < 0 ? 99 : i; };
+function renderJSON(obj) {
+  const pre = document.createDocumentFragment();
+  const put = (txt, cls) => { const s = document.createElement("span"); if (cls) s.className = cls; s.textContent = txt; pre.appendChild(s); };
+  const walk = (v, ind, cls) => {
+    const pad = "  ".repeat(ind);
+    if (Array.isArray(v)) {
+      if (!v.length) return put("[]", cls);
+      put("[\n", cls);
+      v.forEach((x, i) => { put(pad + "  ", cls); walk(x, ind + 1, cls); put(i < v.length - 1 ? ",\n" : "\n", cls); });
+      put(pad + "]", cls);
+    } else if (v && typeof v === "object") {
+      // Orden didáctico: lo importante primero (en FHIR el orden de los campos no altera el significado)
+      const ks = v.resourceType ? Object.keys(v).sort((a, b) => rank(a) - rank(b)) : Object.keys(v); put("{\n", cls);
+      ks.forEach((k, i) => {
+        const c = cls || ROLE[k] || "";
+        put(pad + "  " + JSON.stringify(k) + ": ", c);
+        walk(v[k], ind + 1, c);
+        put(i < ks.length - 1 ? ",\n" : "\n", cls);
+      });
+      put(pad + "}", cls);
+    } else put(JSON.stringify(v), cls);
+  };
+  walk(obj, 0, "");
+  return pre;
+}
+
+// ================= Estado =================
+const S = { fhir: false, sel: null, tab: "x", allergy: "unknown", dup: 0, avoided: 0, reaction: false, amoxGiven: false, levoGiven: false, hbaOrdered: false, pending: null, log: [] };
+const fmtDate = iso => new Date(iso).toLocaleDateString("es-BO", { day: "2-digit", month: "2-digit", year: "numeric" });
+const fmtNum = (v, d = 1) => v.toLocaleString("es-BO", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+function item(container, label, code, resource, src) {
+  const b = document.createElement("button"); b.type = "button"; b.className = "item" + (S.sel === resource ? " sel" : "");
+  b.innerHTML = `<span><span class="lbl"></span><br><span class="code"></span></span><span class="src"></span>`;
+  b.querySelector(".lbl").textContent = label; b.querySelector(".code").textContent = code; b.querySelector(".src").textContent = src;
+  b.setAttribute("aria-label", `${label}. Ver el recurso FHIR`);
+  b.onclick = () => { S.sel = resource; S.tab = "x"; render(); };
+  container.appendChild(b);
+}
+const empty = (el, txt) => { const p = document.createElement("p"); p.className = "empty"; p.textContent = txt; el.appendChild(p); };
+
+function renderER() {
+  $("mode-label").textContent = S.fhir ? "Antecedentes: 3 de 3 sistemas" : "Antecedentes: solo este hospital";
+  for (const id of ["allergy", "problems", "meds", "labs"]) $(id).innerHTML = "";
+  if (S.fhir) {
+    item($("allergy"), "Penicilina · reacción grave (urticaria, dificultad respiratoria)", "SNOMED CT 764146007 · registrada 12/03/2019", ALLERGY, "C. Salud · FHIR");
+    item($("problems"), "Diabetes mellitus tipo 2", "CIE-10 E11 · SNOMED 44054006 · desde 2016", COND_DM, "C. Salud · FHIR");
+    item($("problems"), "Hipertensión arterial", "CIE-10 I10 · SNOMED 38341003 · desde 2018", COND_HTA, "C. Salud · FHIR");
+    item($("meds"), "Metformina 850 mg", "1 cada 12 h · ATC A10BA02", MED_MET, "C. Salud · FHIR");
+    item($("meds"), "Enalapril 10 mg", "1 cada 24 h · ATC C09AA02", MED_ENA, "C. Salud · FHIR");
+    item($("labs"), `HbA1c ${fmtNum(8.1)} % (alta)`, `LOINC 4548-4 · ${fmtDate(HBA1C.effectiveDateTime)}`, HBA1C, "Laboratorio · FHIR");
+    item($("labs"), `Glucosa ${fmtNum(11.2)} mmol/L = ${Math.round(11.2 * MGDL)} mg/dL`, `LOINC 14749-6 · ${fmtDate(GLU[2].effectiveDateTime)}`, GLU[2], "Laboratorio · FHIR");
+  } else {
+    empty($("allergy"), "No hay información de alergias en este hospital. Cuidado: sin dato no significa sin alergia.");
+    empty($("problems"), "Sin registros previos en el hospital.");
+    empty($("meds"), "Desconocida. La hija trae una bolsa con pastillas blancas sin caja.");
+    empty($("labs"), "No disponible. La paciente tiene un informe en PDF en el celular de su hijo, que está de viaje.");
+  }
+  $("cAllergy").classList.toggle("has", S.fhir);
+  renderChart(); renderOrders(); renderScore();
+}
+
+function renderChart() {
+  const svg = $("chart"), ns = "http://www.w3.org/2000/svg";
+  const el = (tag, a, txt) => { const e = document.createElementNS(ns, tag); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; };
+  svg.innerHTML = "";
+  const X0 = 48, X1 = 580, Y0 = 14, Y1 = 160, t0 = Date.parse("2026-06-01"), t1 = Date.parse("2026-10-12");
+  const x = iso => X0 + (Date.parse(iso) - t0) / (t1 - t0) * (X1 - X0), y = v => Y1 - v / 350 * (Y1 - Y0);
+  const css = getComputedStyle(document.documentElement), C = n => css.getPropertyValue(n).trim();
+  for (const v of [0, 100, 200, 300]) { el("line", { x1: X0, x2: X1, y1: y(v), y2: y(v), stroke: C("--line") }); el("text", { x: X0 - 8, y: y(v) + 4, "text-anchor": "end" }, v); }
+  el("rect", { x: X0, y: y(180), width: X1 - X0, height: y(70) - y(180), fill: C("--ok"), opacity: .07 });
+  for (const [iso, lab] of [["2026-06-01", "jun"], ["2026-07-01", "jul"], ["2026-08-01", "ago"], ["2026-09-01", "sep"], ["2026-10-01", "oct"]]) el("text", { x: x(iso), y: Y1 + 18, "text-anchor": "middle" }, lab);
+  const pts = [];
+  if (S.fhir) GLU.forEach(o => pts.push({ iso: o.effectiveDateTime, v: o.valueQuantity.value * MGDL, r: o, lab: `${fmtNum(o.valueQuantity.value)} mmol/L`, c: C("--ok") }));
+  pts.push({ iso: GLU_ER.effectiveDateTime, v: 312, r: GLU_ER, lab: "312 capilar", c: C("--accent-hi") });
+  if (pts.length > 1) el("polyline", { points: pts.map(p => `${x(p.iso)},${y(p.v)}`).join(" "), fill: "none", stroke: C("--muted"), "stroke-dasharray": "3 3" });
+  for (const p of pts) {
+    const g = el("circle", { cx: x(p.iso), cy: y(p.v), r: S.sel === p.r ? 7 : 5, fill: p.c, stroke: C("--bg"), "stroke-width": 2, tabindex: 0, role: "button", style: "cursor:pointer" });
+    g.setAttribute("aria-label", `Glucosa ${Math.round(p.v)} mg/dL, ${fmtDate(p.iso)}. Ver el recurso FHIR`);
+    const open = () => { S.sel = p.r; S.tab = "x"; render(); };
+    g.addEventListener("click", open); g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    el("text", { x: x(p.iso), y: y(p.v) - 12, "text-anchor": "middle", fill: C("--fg") }, `${Math.round(p.v)}`);
+    if (p.r !== GLU_ER) el("text", { x: x(p.iso), y: y(p.v) + 20, "text-anchor": "middle" }, p.lab);
+  }
+  $("chartNote").textContent = S.fhir
+    ? "Verde: resultados del laboratorio, enviados en mmol/L y convertidos a mg/dL gracias al código LOINC y la unidad UCUM. Azul: glucemia capilar de hoy en Urgencias. La glucosa viene subiendo desde junio. Toca un punto para ver su recurso."
+    : "Solo está la glucemia de hoy. No se sabe si es un descontrol nuevo o si viene de antes.";
+}
+
+function addLog(html) { const t = new Date(); S.log.unshift(`${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")} ${html}`); }
+function flag(cls, html, buttons = []) {
+  const d = document.createElement("div"); d.className = "flag " + cls;
+  const p = document.createElement("div"); p.innerHTML = html; d.appendChild(p);
+  if (buttons.length) { const r = document.createElement("div"); r.className = "row"; buttons.forEach(([txt, c, fn]) => { const b = document.createElement("button"); b.type = "button"; b.className = "btn " + c; b.textContent = txt; b.onclick = fn; r.appendChild(b); }); d.appendChild(r); }
+  $("flags").appendChild(d);
+}
+
+function renderOrders() {
+  $("flags").innerHTML = "";
+  $("oAmox").disabled = S.amoxGiven || S.levoGiven || S.pending === "amox";
+  $("oLevo").disabled = S.amoxGiven || S.levoGiven;
+  $("oHba").disabled = S.hbaOrdered || S.pending === "hba" || S.avoided > 0;
+  if (S.pending === "amox") flag("bad", `<b>⚠ Alerta de alergia.</b> María tiene registrada una <b>alergia a la penicilina</b> con reacción grave (urticaria y dificultad respiratoria, 2019). La amoxicilina es una penicilina. Fuente: Centro de Salud Demo, vía FHIR.`, [
+    ["Cambiar a levofloxacino", "good", () => { S.pending = null; S.allergy = "caught"; give("levo"); }],
+    ["Indicar igualmente", "danger", () => { S.pending = null; S.allergy = "ignored"; give("amox"); }],
+  ]);
+  if (S.pending === "hba") flag("warn", `<b>Prueba reciente disponible.</b> Ya hay una HbA1c del ${fmtDate(HBA1C.effectiveDateTime)}: <b>${fmtNum(8.1)} %</b> (Laboratorio Demo). Una HbA1c refleja unos 3 meses, así que repetirla ahora no aporta información nueva.`, [
+    ["No solicitar", "good", () => { S.pending = null; S.avoided++; addLog("HbA1c <b>no solicitada</b>: se usa el resultado del 21/09."); render(); }],
+    ["Solicitar igualmente", "", () => { S.pending = null; S.hbaOrdered = true; S.dup++; addLog("HbA1c solicitada (duplicada)."); render(); }],
+  ]);
+  if (S.reaction) flag("bad", `<b>30 minutos después:</b> María presenta urticaria generalizada y dificultad respiratoria. Se suspende el antibiótico y se trata una reacción alérgica grave. Su alergia a la penicilina constaba desde 2019 en el Centro de Salud Demo, pero este hospital no podía verla.`);
+  if (!S.fhir && S.hbaOrdered) flag("warn", `<b>Dos días después</b> llega el resultado: HbA1c 8,0 %. El Laboratorio Demo ya tenía una de hace dos semanas (8,1 %). Fue una extracción, un reactivo y una espera evitables.`);
+  if (S.fhir && S.allergy === "caught") flag("ok", `<b>Alergia evitada.</b> El antibiótico alternativo se indicó sin pasar por una reacción. Nadie tuvo que llamar al centro de salud ni buscar papeles.`);
+  $("log").innerHTML = S.log.map(l => `<span>${l}</span>`).join("");
+}
+
+function give(drug) {
+  if (drug === "amox") {
+    S.amoxGiven = true; addLog("Indicado <b>amoxicilina/ácido clavulánico</b>.");
+    if (!S.fhir || S.allergy === "ignored") { S.reaction = true; if (!S.fhir) S.allergy = "reaction"; }
+  } else { S.levoGiven = true; addLog("Indicado <b>levofloxacino</b>."); }
+  render();
+}
+$("oAmox").onclick = () => { if (S.fhir) { S.pending = "amox"; render(); } else give("amox"); };
+$("oLevo").onclick = () => { if (S.fhir && S.allergy === "unknown") S.allergy = "known"; give("levo"); };
+$("oHba").onclick = () => { if (S.fhir) { S.pending = "hba"; render(); } else { S.hbaOrdered = true; S.dup++; addLog("HbA1c solicitada."); render(); } };
+
+function renderScore() {
+  const A = {
+    unknown: S.fhir ? ["Conocida", "good"] : ["Desconocida", "warn"], known: ["Conocida", "good"], caught: ["Alerta evitó reacción", "good"],
+    reaction: ["Reacción grave", "bad"], ignored: ["Reacción grave", "bad"],
+  }[S.allergy];
+  const k = [
+    [A[0], "Alergia a penicilina", A[1]],
+    [S.fhir ? "3 de 3" : "1 de 3", "Sistemas con datos de María", S.fhir ? "good" : "warn"],
+    [S.fhir ? `${S.avoided} evitada${S.avoided === 1 ? "" : "s"}` : `${S.dup} duplicada${S.dup === 1 ? "" : "s"}`, "Pruebas de laboratorio", S.fhir ? (S.dup ? "warn" : "good") : (S.dup ? "bad" : "")],
+    [S.fhir ? "≈ 2 segundos" : "≈ 40 minutos", "Reunir antecedentes (ilustrativo)", S.fhir ? "good" : "warn"],
+  ];
+  $("score").innerHTML = "";
+  for (const [v, l, c] of k) { const d = document.createElement("div"); d.className = "kpi " + c; d.innerHTML = `<span class="v"></span><span class="l"></span>`; d.querySelector(".v").textContent = v; d.querySelector(".l").textContent = l; $("score").appendChild(d); }
+}
+
+// ================= Panel derecho =================
+function renderXray() {
+  const X = S.tab === "x";
+  $("tabX").setAttribute("aria-selected", X); $("tabT").setAttribute("aria-selected", !X);
+  $("xray").hidden = !X; $("traffic").hidden = X;
+  if (X) {
+    const json = $("xJson"); json.innerHTML = "";
+    if (!S.fhir) {
+      $("xExplain").innerHTML = "Sin interoperabilidad no hay nada que inspeccionar: cada sistema guarda los datos a su manera. En el centro de salud la alergia es una línea de texto libre, <b>\"penicilina (ronchas y ahogo, 2019)\"</b>, que ningún otro programa sabe interpretar.";
+      $("xReq").hidden = true; $("xLegend").hidden = true;
+      json.textContent = "ALERGIAS: penicilina (ronchas y ahogo, 2019)";
+      return;
+    }
+    const r = S.sel || ALLERGY;
+    const why = {
+      AllergyIntolerance: "La alergia viaja como recurso <b>AllergyIntolerance</b>. La sustancia lleva un código SNOMED CT, así que el sistema del hospital sabe que es una penicilina y puede cruzarla con la amoxicilina que se va a indicar.",
+      Condition: "Cada diagnóstico es un recurso <b>Condition</b> con dos códigos a la vez: SNOMED CT para el detalle clínico y CIE-10 para estadística y facturación.",
+      MedicationStatement: "La medicación habitual es un recurso <b>MedicationStatement</b>, con el fármaco codificado (aquí con ATC) y la pauta.",
+      Observation: r === GLU_ER ? "La glucemia de Urgencias es un recurso <b>Observation</b> del propio hospital, en mg/dL." : "Cada resultado es un recurso <b>Observation</b>. El código LOINC dice exactamente qué se midió y la unidad UCUM permite convertir mmol/L a mg/dL sin errores.",
+    }[r.resourceType];
+    $("xExplain").innerHTML = why;
+    $("xReq").hidden = false; $("xReq").innerHTML = ""; const u = reqFor(r);
+    if (u.startsWith("http")) { const m = document.createElement("span"); m.className = "m"; m.textContent = "GET "; $("xReq").append(m, document.createTextNode(u)); } else $("xReq").textContent = u;
+    $("xLegend").hidden = false;
+    json.appendChild(renderJSON(r));
+  } else {
+    $("tExplain").textContent = S.fhir
+      ? "Estas son las consultas que el sistema del hospital hizo a los otros dos en cuanto María fue registrada con su CI. Toca una para ver la respuesta."
+      : "Sin interoperabilidad no hay tráfico entre sistemas: los antecedentes se buscan por teléfono, fax o preguntando a la familia.";
+    renderTraffic(false);
+  }
+}
+let trafficTimer = [];
+function renderTraffic(animate) {
+  trafficTimer.forEach(clearTimeout); trafficTimer = [];
+  const list = $("tList"); list.innerHTML = "";
+  if (!S.fhir) return;
+  TRAFFIC.forEach((t, i) => {
+    const b = document.createElement("button"); b.type = "button";
+    b.innerHTML = `<span class="m">GET</span><span class="u"></span><span class="s"></span><span class="who"></span>`;
+    b.querySelector(".u").textContent = t.url.replace(/^https:\/\//, "");
+    b.querySelector(".s").textContent = `200 · ${t.res.total}`;
+    b.querySelector(".who").textContent = t.who;
+    b.onclick = () => { S.tab = "x"; S.sel = null; renderXray(); $("xExplain").innerHTML = "Respuesta completa de la consulta: un <b>Bundle</b> (paquete) con los recursos encontrados."; $("xReq").hidden = false; $("xReq").innerHTML = '<span class="m">GET </span>'; $("xReq").append(document.createTextNode(t.url)); $("xJson").innerHTML = ""; $("xJson").appendChild(renderJSON(t.res)); };
+    list.appendChild(b);
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (animate && !reduce) trafficTimer.push(setTimeout(() => b.classList.add("in"), 250 + i * 380)); else b.classList.add("in");
+  });
+}
+$("tabX").onclick = () => { S.tab = "x"; renderXray(); };
+$("tabT").onclick = () => { S.tab = "t"; renderXray(); };
+
+// ================= Modo, reinicio y render =================
+function render() {
+  $("modeOff").setAttribute("aria-pressed", !S.fhir); $("modeOn").setAttribute("aria-pressed", S.fhir);
+  document.querySelectorAll("[data-conn]").forEach(e => { e.className = "conn " + (S.fhir ? "on" : "off"); e.textContent = S.fhir ? "FHIR ⇄ conectado" : "sin conexión"; });
+  renderER(); renderXray();
+}
+function resetCase(keepMode = true) {
+  Object.assign(S, { sel: null, allergy: "unknown", dup: 0, avoided: 0, reaction: false, amoxGiven: false, levoGiven: false, hbaOrdered: false, pending: null, log: [] });
+  if (!keepMode) { S.fhir = false; S.tab = "x"; }
+}
+function setMode(on) {
+  if (S.fhir === on) return;
+  resetCase(); S.fhir = on;
+  addLog(on ? "María registrada con su CI: el hospital consulta a los otros sistemas por FHIR." : "Modo sin interoperabilidad.");
+  if (on) { S.tab = "t"; render(); renderTraffic(true); } else render();
+}
+$("modeOff").onclick = () => setMode(false);
+$("modeOn").onclick = () => setMode(true);
+$("resetBtn").onclick = () => { resetCase(false); trafficTimer.forEach(clearTimeout); render(); showTour(0, false); focus([]); window.scrollTo({ top: 0 }); };
+
+// ================= Guion =================
+const focus = ids => document.querySelectorAll(".panel, .systems").forEach(p => p.classList.toggle("focus", ids.includes(p.id)));
+const TOUR = [
+  { t: "Llega María a Urgencias", p: "Tiene 67 años, fiebre, tos y confusión. Su historia está en tres sistemas que no se comunican, y el hospital solo ve lo que registra él mismo. Empezamos sin interoperabilidad.", go: () => { setMode(false); focus(["pSys"]); } },
+  { t: "Decide sin antecedentes", p: "Con sospecha de neumonía, indica amoxicilina/ácido clavulánico y pide una HbA1c para valorar su diabetes. Usa los botones de Indicaciones y mira qué ocurre.", go: () => { setMode(false); focus(["pER"]); } },
+  { t: "Ahora, con HL7 FHIR", p: "Mismo caso, pero los sistemas comparten datos. Al registrar a María con su CI, el hospital pregunta automáticamente al centro de salud y al laboratorio. En el panel derecho ves esas consultas.", go: () => { setMode(true); focus(["pXray", "pER"]); } },
+  { t: "La alerta que llega a tiempo", p: "Vuelve a indicar amoxicilina/ácido clavulánico y vuelve a pedir la HbA1c. Esta vez el sistema conoce la alergia y el resultado reciente.", go: () => { setMode(true); focus(["pER"]); } },
+  { t: "Rayos X del dato", p: "Toca la alergia en la pantalla de Urgencias. A la derecha aparece el recurso FHIR que la transporta: qué tipo de dato es, su código estándar y a qué paciente pertenece.", go: () => { setMode(true); S.sel = ALLERGY; S.tab = "x"; render(); focus(["pXray"]); } },
+  { t: "Mismo dato, distinto idioma", p: "El laboratorio informa la glucosa en mmol/L y el hospital trabaja en mg/dL. El código LOINC y la unidad estándar permiten convertirla y ver que viene subiendo desde junio. Toca un punto del gráfico.", go: () => { setMode(true); S.sel = GLU[2]; S.tab = "x"; render(); focus(["pER", "pXray"]); } },
+  { t: "Antes y ahora", p: "Abajo tienes el mismo resultado de glucosa en HL7 v2, el formato de los años 90 que todavía se usa mucho, y en FHIR. Debajo se resumen las ventajas que acabas de ver.", go: () => { focus(["pVs"]); $("pVs").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); } },
+];
+let tourI = 0;
+$("dots").innerHTML = TOUR.map(() => "<span></span>").join("");
+function showTour(i, run = true) {
+  tourI = (i + TOUR.length) % TOUR.length; const st = TOUR[tourI];
+  $("tourN").textContent = tourI + 1; $("tourT").textContent = st.t; $("tourP").textContent = st.p;
+  [...$("dots").children].forEach((d, k) => d.classList.toggle("on", k === tourI));
+  $("tourNext").textContent = tourI === TOUR.length - 1 ? "Volver a empezar" : "Siguiente ▶";
+  if (run) st.go();
+}
+$("tourNext").onclick = () => showTour(tourI + 1);
+$("tourPrev").onclick = () => showTour(tourI - 1);
+
+// ================= HL7 v2 frente a FHIR =================
+$("v2").textContent = [
+  "MSH|^~\\&|LABDEMO|LABORATORIO|HIS|HOSPDEMO|20260921083000||ORU^R01|MSG00042|P|2.5.1",
+  "PID|1||L-77812^^^LABDEMO^MR~4829173-LP^^^BO^NI||QUISPE MAMANI^MARIA||19590314|F",
+  "OBR|1||L-55301|14749-6^Glucose [Moles/volume] in Serum or Plasma^LN|||20260921073000",
+  "OBX|1|NM|14749-6^Glucose [Moles/volume] in Serum or Plasma^LN||11.2|mmol/L^mmol/L^UCUM|3.9-5.5|H|||F",
+].join("\n");
+$("fhirObs").appendChild(renderJSON(GLU[2]));
+
+window.__fhir = { S, TRAFFIC };
+resetCase(false); render(); showTour(0, false); focus([]);
+})();
+</script>
+</body>
+</html>
